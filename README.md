@@ -4,72 +4,36 @@ Live demo: https://systemslibrarian.github.io/crypto-lab-timing-oracle/
 
 Timing Attack · Constant-Time · HMAC · RSA · Cache-Timing
 
-## Overview
+## 1. What It Is
 
-`crypto-lab-timing-oracle` is a browser-based interactive demo showing timing side-channel attacks and constant-time defenses side by side. It uses real measurements from `performance.now()` and `performance.mark()`, with no simulated timing data.
+`crypto-lab-timing-oracle` is a browser demo of timing side-channel behavior in string comparison, WebCrypto HMAC-SHA-256 verification, toy RSA arithmetic, and cache-sensitive memory access patterns. It shows vulnerable and constant-time implementations side by side using live browser timing measurements. The core cryptographic primitives in this demo are HMAC-SHA-256 and RSA, while the timing panels illustrate how implementation choices can leak secret-dependent information. HMAC is a symmetric primitive and RSA is an asymmetric primitive, and both are evaluated here under a side-channel threat model where attackers observe timing differences.
 
-## Attacks Covered
+## 2. When to Use It
 
-1. String comparison timing leak from early-exit mismatch logic.
-2. HMAC verification leak from naive byte-by-byte comparison.
-3. RSA private key bit leakage in square-and-multiply exponentiation.
-4. Cache-timing leakage model for secret-dependent table lookups.
-5. Defensive constant-time coding patterns and historical incidents.
+- Use it to teach why constant-time comparison is required for MAC and secret checks, because it makes timing leakage visible with repeatable measurements.
+- Use it in secure coding workshops for HMAC and RSA implementations, because it pairs vulnerable and defensive patterns in one place.
+- Use it when validating threat modeling assumptions for browser-adjacent crypto code, because it demonstrates how timing observations can still reveal patterns even with reduced timer precision.
+- Do not use it as a production cryptography library, because it is an educational demo with intentionally vulnerable code paths.
 
-## Primitives Used
+## 3. Live Demo
 
-1. WebCrypto HMAC-SHA-256 for MAC generation and verification experiments.
-2. Toy RSA arithmetic for branch-dependent exponentiation timing demonstrations.
-3. JavaScript typed arrays for cache residency timing experiments.
-4. Browser timing APIs: `performance.now()` and `performance.mark()`.
+Live demo: https://systemslibrarian.github.io/crypto-lab-timing-oracle/
 
-## Running Locally
+The demo lets you run timing experiments for string comparison, HMAC verification, RSA exponentiation behavior, and cache access timing. You can change controls such as target secret string, attacker guess string, message, and forged MAC hex, then trigger benchmark runs to compare vulnerable versus constant-time outcomes. Iteration counts and experiment parameters are built into each panel button action rather than exposed as free-form inputs.
+
+## 4. How to Run Locally
 
 ```bash
+git clone https://github.com/systemslibrarian/crypto-lab-timing-oracle.git
+cd crypto-lab-timing-oracle
 npm install
 npm run dev
 ```
 
-Build for production:
+No environment variables are required.
 
-```bash
-npm run build
-```
+## 5. Part of the Crypto-Lab Suite
 
-Deploy to GitHub Pages:
-
-```bash
-npm run deploy
-```
-
-## Security Notes
-
-This demo uses real timing sources, but browser timer resolution is reduced by Spectre mitigations. Real-world exploitation usually requires more samples and stronger statistical analysis than shown here. The vulnerable implementation patterns are still real and have caused production cryptographic failures.
-
-References:
-
-1. Kocher (1996), *Timing Attacks on Implementations of Diffie-Hellman, RSA, DSS, and Other Systems*.
-2. Bernstein (2005), cache-timing attacks on AES software table lookups.
-
-## Accessibility
-
-Designed for WCAG 2.1 AA goals:
-
-1. Keyboard-navigable controls and visible focus indicators.
-2. Screen-reader-friendly labels and live status messaging.
-3. Text summaries for charts so timing differences are not color-only.
-4. Responsive layout and reduced-motion support via `prefers-reduced-motion`.
-
-## Why This Matters
-
-Cryptography can fail even when the algorithm is correct, if implementation timing leaks secret-dependent behavior. Constant-time programming is a core security requirement for handling secrets.
-
-## Related Demos
-
-1. https://github.com/systemslibrarian/crypto-lab-aes-modes
-2. https://github.com/systemslibrarian/crypto-lab-mac-race
-3. https://github.com/systemslibrarian/crypto-lab-rsa-forge
-4. https://github.com/systemslibrarian/crypto-compare
-5. https://github.com/systemslibrarian/crypto-lab
+This demo is part of the larger Crypto-Lab collection at https://systemslibrarian.github.io/crypto-lab/.
 
 So whether you eat or drink or whatever you do, do it all for the glory of God. — 1 Corinthians 10:31

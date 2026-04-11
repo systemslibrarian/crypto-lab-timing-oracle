@@ -17,10 +17,11 @@ function prefersReducedMotion(): boolean {
 }
 
 function setTheme(theme: "light" | "dark"): void {
-  document.documentElement.dataset.theme = theme;
+  document.documentElement.setAttribute("data-theme", theme);
   const button = byId<HTMLButtonElement>("theme-toggle");
-  button.setAttribute("aria-pressed", String(theme === "dark"));
-  button.textContent = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  const isDark = theme === "dark";
+  button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+  button.textContent = isDark ? "🌙" : "☀️";
 }
 
 function renderAppShell(): void {
@@ -38,7 +39,7 @@ function renderAppShell(): void {
         <span class="primitive-chip">RSA</span>
         <span class="primitive-chip">Cache-Timing</span>
       </div>
-      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark and light mode" aria-pressed="false" type="button">Switch to dark mode</button>
+      <button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode" type="button">🌙</button>
     </header>
 
     <main id="main-content" aria-label="Timing oracle demo panels">
@@ -148,21 +149,19 @@ function renderAppShell(): void {
       </section>
     </main>
 
-    <footer class="footer" aria-label="Demo footer">
-      <a class="github" href="https://github.com/systemslibrarian/crypto-lab-timing-oracle" target="_blank" rel="noreferrer" aria-label="GitHub repository link">GitHub</a>
-      <p>So whether you eat or drink or whatever you do, do it all for the glory of God. — 1 Corinthians 10:31</p>
-    </footer>
   `;
 }
 
 function wireThemeToggle(): void {
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  setTheme(prefersDark ? "dark" : "light");
+  const saved = localStorage.getItem("theme");
+  const current = saved === "light" || saved === "dark" ? saved : "dark";
+  setTheme(current);
 
   const toggle = byId<HTMLButtonElement>("theme-toggle");
   toggle.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     setTheme(next as "light" | "dark");
+    localStorage.setItem("theme", next);
   });
 }
 
