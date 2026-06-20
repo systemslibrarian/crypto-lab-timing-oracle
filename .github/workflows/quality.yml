@@ -1,0 +1,38 @@
+name: Quality
+
+# Runs lint, unit/integration tests, and a real-Chrome Lighthouse audit
+# (accessibility incl. color-contrast, plus mobile performance/SEO/best-practices).
+# Separate from deploy.yml so a Lighthouse regression surfaces loudly on PRs
+# without blocking the GitHub Pages deploy.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # Build with a root base so the static Lighthouse server resolves assets.
+      - run: npx vite build --base=/ --outDir dist-lh
+      # Drop the SPA 404 redirect stub so Lighthouse only audits the app page (/),
+      # not the redirect (lhci staticDistDir auto-discovers every .html file).
+      - run: rm -f dist-lh/404.html
+      - uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: false

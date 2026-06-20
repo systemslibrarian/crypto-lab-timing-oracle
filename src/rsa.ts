@@ -20,9 +20,9 @@ type ToyRsaKeypair = {
   q: bigint;
 };
 
-function modPowNaive(base: bigint, exponent: bigint, modulus: bigint): bigint {
+export function modPowNaive(base: bigint, exponent: bigint, modulus: bigint): bigint {
   let result = 1n;
-  let current = base % modulus;
+  const current = base % modulus;
   const bitLength = exponent.toString(2).length;
 
   for (let index = bitLength - 1; index >= 0; index -= 1) {
@@ -36,7 +36,7 @@ function modPowNaive(base: bigint, exponent: bigint, modulus: bigint): bigint {
   return result;
 }
 
-function modPowMontgomeryLadder(base: bigint, exponent: bigint, modulus: bigint): bigint {
+export function modPowMontgomeryLadder(base: bigint, exponent: bigint, modulus: bigint): bigint {
   let r0 = 1n;
   let r1 = base % modulus;
   const bitLength = exponent.toString(2).length;
@@ -111,25 +111,25 @@ function randomPrime(min = 200n, max = 500n): bigint {
 }
 
 function generateToyRsaKeypair(): ToyRsaKeypair {
-  let p = randomPrime();
-  let q = randomPrime();
-  while (q === p) {
-    q = randomPrime();
+  // Regenerate primes until a valid public exponent exists. Each attempt tries a
+  // range of standard exponents constrained to e < phi (textbook RSA), so the
+  // function does not throw on unlucky prime pairs.
+  const candidates = [65537n, 257n, 17n, 5n, 3n];
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const p = randomPrime();
+    let q = randomPrime();
+    while (q === p) {
+      q = randomPrime();
+    }
+    const n = p * q;
+    const phi = (p - 1n) * (q - 1n);
+    for (const e of candidates) {
+      if (e < phi && gcd(e, phi) === 1n) {
+        return { n, e, d: modInverse(e, phi), p, q };
+      }
+    }
   }
-  const n = p * q;
-  const phi = (p - 1n) * (q - 1n);
-  let e = 65537n;
-  if (gcd(e, phi) !== 1n) {
-    e = 17n;
-  }
-  if (gcd(e, phi) !== 1n) {
-    e = 3n;
-  }
-  if (gcd(e, phi) !== 1n) {
-    throw new Error("Could not choose RSA public exponent");
-  }
-  const d = modInverse(e, phi);
-  return { n, e, d, p, q };
+  throw new Error("Could not generate toy RSA key");
 }
 
 function mean(values: number[]): number {
