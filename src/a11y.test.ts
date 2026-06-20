@@ -43,6 +43,14 @@ function stubBrowser(): void {
     onchange: null,
     dispatchEvent: () => false
   })) as unknown as typeof window.matchMedia;
+
+  // No-op observer: panels stay deferred, so axe scans the static shell.
+  class NoopIO {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  window.IntersectionObserver = NoopIO as unknown as typeof IntersectionObserver;
 }
 
 describe("accessibility (axe-core)", () => {

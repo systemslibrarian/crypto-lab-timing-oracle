@@ -13,10 +13,6 @@ function byId<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-function prefersReducedMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 const redraws: Array<() => void> = [];
 
 function setTheme(theme: "light" | "dark"): void {
@@ -33,6 +29,40 @@ function setTheme(theme: "light" | "dark"): void {
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}
+
+/** Run `fn` during browser idle time, falling back to a macrotask. */
+function scheduleIdle(fn: () => void): void {
+  const idle: typeof window.requestIdleCallback | undefined = window.requestIdleCallback;
+  if (typeof idle === "function") {
+    idle(() => fn(), { timeout: 2000 });
+  } else {
+    window.setTimeout(fn, 0);
+  }
+}
+
+/**
+ * Run `fn` once, the first time `target` scrolls into view, scheduled during
+ * idle time. Keeps the heavy benchmarks off the initial-load critical path so
+ * the page stays fast and responsive on mobile.
+ */
+function runWhenVisible(target: Element, fn: () => void): void {
+  if (typeof IntersectionObserver === "undefined") {
+    scheduleIdle(fn);
+    return;
+  }
+  const observer = new IntersectionObserver(
+    (entries, obs) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          obs.disconnect();
+          scheduleIdle(fn);
+        }
+      }
+    },
+    { rootMargin: "200px 0px" }
+  );
+  observer.observe(target);
 }
 
 /** Disable the trigger, show a Running… state, paint it, then run the work. */
@@ -449,31 +479,20 @@ function wireResizeRedraw(): void {
 export function initUi(): void {
   renderAppShell();
   wireThemeToggle();
-  const runString = wireStringPanel();
-  const runHmac = wireHmacPanel();
-  const runRsa = wireRsaPanel();
-  const runCache = wireCachePanel();
+  const panels: Array<[string, () => Promise<void>]> = [
+    ["strcmp-run", wireStringPanel()],
+    ["hmac-run", wireHmacPanel()],
+    ["rsa-run", wireRsaPanel()],
+    ["cache-run", wireCachePanel()]
+  ];
   wireResizeRedraw();
 
-  byId<HTMLParagraphElement>("cache-summary").textContent = prefersReducedMotion()
-    ? "Reduced-motion mode detected: chart redraw animations are disabled."
-    : "Running benchmarks…";
-
-  // Run panels sequentially after first paint so the page stays responsive.
-  // Each panel is isolated so a failure in one cannot block the others.
-  void (async () => {
-    const panels: Array<[string, () => Promise<void>]> = [
-      ["strcmp-run", runString],
-      ["hmac-run", runHmac],
-      ["rsa-run", runRsa],
-      ["cache-run", runCache]
-    ];
-    for (const [id, run] of panels) {
-      try {
-        await withRunning(byId<HTMLButtonElement>(id), run);
-      } catch {
-        /* a single panel failing must not stop the rest from initializing */
-      }
-    }
-  })();
+  // Defer each panel's benchmark until it scrolls into view (during idle time),
+  // so initial load does almost no work. Below-the-fold panels — including the
+  // heavy RSA panel — never run until the user reaches them.
+  for (const [id, run] of panels) {
+    const button = byId<HTMLButtonElement>(id);
+    const target = button.closest("section") ?? button;
+    runWhenVisible(target, () => void withRunning(button, run));
+  }
 }

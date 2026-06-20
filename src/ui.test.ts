@@ -54,6 +54,27 @@ describe("initUi integration", () => {
     });
     window.requestAnimationFrame = ((cb: FrameRequestCallback) =>
       setTimeout(() => cb(Date.now()), 0)) as unknown as typeof window.requestAnimationFrame;
+    window.requestIdleCallback = ((cb: (deadline: IdleDeadline) => void) =>
+      setTimeout(
+        () => cb({ didTimeout: false, timeRemaining: () => 50 } as IdleDeadline),
+        0
+      )) as unknown as typeof window.requestIdleCallback;
+    // Fire the lazy-load observer immediately so panels run during the test.
+    class ImmediateIO {
+      private readonly cb: IntersectionObserverCallback;
+      constructor(cb: IntersectionObserverCallback) {
+        this.cb = cb;
+      }
+      observe(el: Element): void {
+        this.cb(
+          [{ isIntersecting: true, target: el } as unknown as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver
+        );
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    window.IntersectionObserver = ImmediateIO as unknown as typeof IntersectionObserver;
     window.matchMedia = ((query: string) => ({
       matches: false,
       media: query,
