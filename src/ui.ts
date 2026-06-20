@@ -60,7 +60,7 @@ function runWhenVisible(target: Element, fn: () => void): void {
         }
       }
     },
-    { rootMargin: "200px 0px" }
+    { rootMargin: "0px" }
   );
   observer.observe(target);
 }
