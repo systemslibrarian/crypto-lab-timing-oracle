@@ -12,6 +12,9 @@
   --border: #b6a486;
   --focus: #0059d6;
   --shadow: 0 14px 34px rgba(36, 26, 13, 0.16);
+  --chart-surface: #fffaf1;
+  --chart-grid: rgba(31, 34, 40, 0.1);
+  --chart-axis: #8a7c63;
   font-size: 16px;
 }
 
@@ -29,6 +32,9 @@
   --border: #7990ac;
   --focus: #7bc1ff;
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  --chart-surface: #1a222d;
+  --chart-grid: rgba(242, 244, 248, 0.12);
+  --chart-axis: #8da3bf;
 }
 
 * {
@@ -136,6 +142,15 @@ button {
   color: var(--muted);
 }
 
+/* Long unbreakable tokens (MAC hex, key digits) must wrap, not overflow. */
+.panel-note,
+.chart-summary,
+.verdict,
+code,
+input {
+  overflow-wrap: break-word;
+}
+
 .chip-row,
 .status-row,
 .links {
@@ -223,7 +238,102 @@ canvas {
   border: 1px solid var(--border);
   border-radius: 0.8rem;
   margin-top: 0.6rem;
-  background: #f3f6fb;
+  background: var(--chart-surface);
+}
+
+button[aria-busy="true"],
+button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+button[aria-busy="true"] {
+  position: relative;
+}
+
+.verdict {
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--border);
+  border-left-width: 5px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  background: var(--panel);
+  min-height: 1.2rem;
+}
+
+.verdict:empty {
+  display: none;
+}
+
+.verdict strong {
+  font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+}
+
+.verdict--leak {
+  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+
+.verdict--safe {
+  border-left-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, var(--panel));
+}
+
+.verdict--inconclusive {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
+}
+
+.chart-data {
+  margin-top: 0.6rem;
+  font-size: 0.92rem;
+  overflow-x: auto; /* keep wide tables from forcing horizontal page scroll on phones */
+}
+
+.chart-data summary {
+  cursor: pointer;
+  color: var(--muted);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.chart-data summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+
+.chart-data table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.4rem;
+}
+
+.chart-data caption {
+  text-align: left;
+  color: var(--muted);
+  padding-bottom: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.chart-data th,
+.chart-data td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.55rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-data thead th,
+.chart-data tbody th {
+  text-align: left;
+}
+
+.chart-data thead th {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 
 .panel-head {
@@ -295,6 +405,15 @@ canvas {
   font-weight: 700;
   background: color-mix(in srgb, var(--accent) 25%, var(--panel));
   margin-bottom: 0.4rem;
+}
+
+.page-footer {
+  max-width: 1140px;
+  margin: 1.5rem auto 2rem;
+  padding: 1.5rem 0.8rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 @media (min-width: 768px) {
