@@ -22,7 +22,7 @@ type ToyRsaKeypair = {
 
 export function modPowNaive(base: bigint, exponent: bigint, modulus: bigint): bigint {
   let result = 1n;
-  let current = base % modulus;
+  const current = base % modulus;
   const bitLength = exponent.toString(2).length;
 
   for (let index = bitLength - 1; index >= 0; index -= 1) {
