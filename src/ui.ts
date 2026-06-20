@@ -106,7 +106,7 @@ function renderAppShell(): void {
           <input id="strcmp-target" aria-label="Target secret string input" value="timing-oracle-demo-secret" />
           <label for="strcmp-guess">Attacker guess string</label>
           <input id="strcmp-guess" aria-label="Attacker guess string input" value="timing-oracle-demo-xxxxx" />
-          <button id="strcmp-run" type="button" aria-label="Run string comparison timing benchmark">Run 10,000 iterations per mode</button>
+          <button id="strcmp-run" type="button">Run 10,000 iterations per mode</button>
         </div>
         <canvas id="strcmp-hist" aria-label="Histogram comparing vulnerable and constant-time string comparison timings" role="img"></canvas>
         <p id="strcmp-summary" class="chart-summary" aria-live="polite"></p>
@@ -125,7 +125,7 @@ function renderAppShell(): void {
           <input id="hmac-message" aria-label="Message for HMAC verification" value="POST /api/transfer?amount=1000" />
           <label for="hmac-forged">Forged MAC hex</label>
           <input id="hmac-forged" aria-label="Forged HMAC in hexadecimal" value="0000000000000000000000000000000000000000000000000000000000000000" />
-          <button id="hmac-run" type="button" aria-label="Run HMAC timing benchmark">Measure MAC prefix timing</button>
+          <button id="hmac-run" type="button">Measure MAC prefix timing</button>
         </div>
         <div id="hmac-error" class="error" role="status" aria-live="assertive"></div>
         <canvas id="hmac-line" aria-label="Line chart of HMAC timing by correct prefix length" role="img"></canvas>
@@ -141,7 +141,7 @@ function renderAppShell(): void {
           <span class="status warn">Always use constant-time exponentiation</span>
         </div>
         <p class="panel-text">Square-and-multiply uses a secret-dependent branch on each exponent bit. Montgomery ladder keeps operation count uniform.</p>
-        <button id="rsa-run" type="button" aria-label="Run RSA bit leakage benchmark">Generate toy RSA key and measure bit leakage</button>
+        <button id="rsa-run" type="button">Generate toy RSA key and measure bit leakage</button>
         <canvas id="rsa-hist" aria-label="Histogram of RSA timing under different private key bit patterns" role="img"></canvas>
         <p id="rsa-summary" class="chart-summary" aria-live="polite"></p>
         <div id="rsa-verdict" class="verdict" role="status" aria-live="polite"></div>
@@ -158,7 +158,7 @@ function renderAppShell(): void {
           </div>
         </div>
         <p class="panel-text">Cache hits and misses have different access latency. Secret-dependent table lookups can leak information via timing.</p>
-        <button id="cache-run" type="button" aria-label="Run cache timing benchmark">Measure cached vs uncached memory access</button>
+        <button id="cache-run" type="button">Measure cached vs uncached memory access</button>
         <canvas id="cache-hist" aria-label="Histogram of cached and uncached memory access timings" role="img"></canvas>
         <div class="cache-grid" aria-label="Cache hierarchy timing diagram" role="img">
           <div><strong>L1</strong><span id="l1-v">~1 ns</span></div>

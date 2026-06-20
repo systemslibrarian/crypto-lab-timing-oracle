@@ -12,6 +12,7 @@
   --border: #b6a486;
   --focus: #0059d6;
   --shadow: 0 14px 34px rgba(36, 26, 13, 0.16);
+  --on-accent: #ffffff;
   --chart-surface: #fffaf1;
   --chart-grid: rgba(31, 34, 40, 0.1);
   --chart-axis: #8a7c63;
@@ -26,12 +27,13 @@
   --muted: #d0d7e3;
   --accent: #31d7bb;
   --accent-2: #ffb469;
-  --danger: #ff718f;
+  --danger: #ff8aa0;
   --ok: #7ef7b1;
   --warn: #ffd07c;
   --border: #7990ac;
   --focus: #7bc1ff;
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  --on-accent: #08221e;
   --chart-surface: #1a222d;
   --chart-grid: rgba(242, 244, 248, 0.12);
   --chart-axis: #8da3bf;
@@ -103,7 +105,7 @@ a {
 
 .category-chip {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: transparent;
   font-weight: 700;
 }
@@ -349,7 +351,7 @@ button[aria-busy="true"] {
 .bad {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 65%, var(--border));
-  background: color-mix(in srgb, var(--danger) 16%, var(--panel));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
 }
 
 .good {
