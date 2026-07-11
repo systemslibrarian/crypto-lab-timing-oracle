@@ -12,6 +12,11 @@ dist-lh/
 .vite/
 *.tsbuildinfo
 
+# Playwright
+/test-results/
+/playwright-report/
+/.pw-browsers/
+
 # Logs and OS cruft
 *.log
 npm-debug.log*

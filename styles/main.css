@@ -9,6 +9,9 @@
   --danger: #9f1d35;
   --ok: #14683e;
   --warn: #9a5f00;
+  /* Lifted text ink for status words on the tinted .warn fill; keep bright
+     --warn for the border/swatch. #9a5f00 on the 16% tint is only 4.06:1. */
+  --warn-text: #7a4a00;
   --border: #b6a486;
   --focus: #0059d6;
   --shadow: 0 14px 34px rgba(36, 26, 13, 0.16);
@@ -30,6 +33,7 @@
   --danger: #ff8aa0;
   --ok: #7ef7b1;
   --warn: #ffd07c;
+  --warn-text: #ffd07c;
   --border: #7990ac;
   --focus: #7bc1ff;
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
@@ -361,7 +365,7 @@ button[aria-busy="true"] {
 }
 
 .warn {
-  color: var(--warn);
+  color: var(--warn-text);
   border-color: color-mix(in srgb, var(--warn) 65%, var(--border));
   background: color-mix(in srgb, var(--warn) 16%, var(--panel));
 }
