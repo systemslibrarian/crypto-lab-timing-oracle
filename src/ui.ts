@@ -98,30 +98,20 @@ function renderAppShell(): void {
   const app = byId<HTMLDivElement>("app");
   app.innerHTML = `
     <a class="skip-link" href="#main-content">Skip to main content</a>
-    <header class="hero" aria-label="Demo header">
-      <div class="category-chip">Side-Channel Attacks</div>
-      <h1>Timing Oracle</h1>
-      <p class="subtitle">Browser-native timing side-channel lab: vulnerable vs constant-time implementations with real measurements.</p>
-      <div class="chip-row">
-        <span class="primitive-chip">Timing Attack</span>
-        <span class="primitive-chip">Constant-Time</span>
-        <span class="primitive-chip">HMAC</span>
-        <span class="primitive-chip">RSA</span>
-        <span class="primitive-chip">Cache-Timing</span>
+    <header class="cl-hero">
+      <div class="cl-hero-main">
+        <h1 class="cl-hero-title">Timing Oracle</h1>
+        <p class="cl-hero-sub">Timing side-channels · Constant-time defenses</p>
+        <p class="cl-hero-desc">Runs vulnerable vs constant-time string comparison, HMAC verification, RSA exponentiation, and cache access in your browser and measures whether a secret-dependent timing signal is detectable.</p>
       </div>
+      <aside class="cl-hero-why" aria-label="Why it matters">
+        <span class="cl-hero-why-label">WHY IT MATTERS</span>
+        <p class="cl-hero-why-text">Choosing the right algorithm is not enough: timing leaks have broken RSA, AES, HMAC, and TLS in shipped systems. When execution time depends on secret data, an attacker who measures it can recover keys and MACs, which is why constant-time code is mandatory in crypto.</p>
+      </aside>
       <button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode" type="button">🌙</button>
     </header>
 
     <main id="main-content" aria-label="Timing oracle demo panels">
-      <section class="why" aria-labelledby="why-title">
-        <h2 id="why-title">Why this matters</h2>
-        <p>
-          Correct algorithm choice is not enough: implementation timing leaks have broken RSA, AES, HMAC, and TLS in production systems.
-          Constant-time programming is non-negotiable in cryptographic code. Each panel below runs the vulnerable and hardened code in
-          <em>your</em> browser and reports whether a timing signal is measurable right now.
-        </p>
-      </section>
-
       <section class="panel" aria-labelledby="panel1-title">
         <div class="panel-head">
           <h2 id="panel1-title">Panel 1 — String Comparison Timing Attack</h2>
