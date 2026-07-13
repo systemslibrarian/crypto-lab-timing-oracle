@@ -1,7 +1,9 @@
+import { createCompareAnimator, createExponentAnimator } from "./animate";
 import { benchmarkCacheTiming, type CacheTimingStats } from "./cache";
 import { benchmarkHmacVerification, type HmacTimingStats } from "./hmac";
+import { modeledPrefixCost } from "./mechanism";
 import { benchmarkRsaTiming, type RsaTimingStats } from "./rsa";
-import { renderDataTable, renderHistogram, renderLineChart } from "./stats";
+import { renderDataTable, renderHistogram, renderLineChart, type LineSeries } from "./stats";
 import { benchmarkStringComparisons, type ComparisonStats } from "./strcmp";
 import { cacheVerdict, hmacVerdict, rsaVerdict, stringComparisonVerdict, type Verdict } from "./verdict";
 
@@ -128,10 +130,43 @@ function renderAppShell(): void {
           <input id="strcmp-guess" aria-label="Attacker guess string input" value="timing-oracle-demo-xxxxx" />
           <button id="strcmp-run" type="button">Run 10,000 iterations per mode</button>
         </div>
-        <canvas id="strcmp-hist" aria-label="Histogram comparing vulnerable and constant-time string comparison timings" role="img"></canvas>
+
+        <div class="mechanism" id="strcmp-mech" aria-labelledby="strcmp-mech-title">
+          <div class="mechanism-head">
+            <h3 id="strcmp-mech-title" class="mechanism-title">The mechanism, step by step</h3>
+            <button id="strcmp-mech-play" class="mech-play" type="button" aria-label="Replay the compare-loop animation">▶ Replay</button>
+          </div>
+          <p class="mechanism-lead">This runs the compare loop for real on your current guess and counts byte checks — no timer, so it is exact every run. Watch the vulnerable loop stop at the first mismatch.</p>
+          <div class="mech-grid" tabindex="0" role="region" aria-label="Byte-by-byte comparison of secret and guess">
+            <div class="mech-row" data-role="target-row"></div>
+            <div class="mech-row" data-role="guess-row"></div>
+          </div>
+          <div class="mech-counters" aria-live="polite">
+            <span class="mech-counter mech-counter--vuln">Vulnerable byte checks: <strong data-role="vuln-count">0</strong></span>
+            <span class="mech-counter mech-counter--ct">Constant-time byte checks: <strong data-role="ct-count">0</strong></span>
+          </div>
+          <p class="mech-status" data-role="mech-status" aria-live="polite"></p>
+          <p class="mech-legend"><span class="mech-key mech-key--match">✓ matched</span> <span class="mech-key mech-key--mismatch">✗ first mismatch (loop exits)</span> <span class="mech-key mech-key--skipped">– never inspected</span></p>
+        </div>
+
+        <figure class="chart-figure">
+          <figcaption id="strcmp-cap" class="chart-caption">What you are looking at: time vs. how many leading bytes the guess got right. A line that <strong>rises to the right</strong> = each correct byte costs more = leak. A <strong>flat line</strong> = constant-time = safe.</figcaption>
+          <canvas id="strcmp-sweep" aria-label="Line chart of vulnerable and constant-time comparison time versus number of correct leading bytes" role="img" aria-describedby="strcmp-cap"></canvas>
+        </figure>
+        <div class="mode-toggle">
+          <label class="mode-check"><input type="checkbox" id="strcmp-modeled" /> <span>Show modeled ideal signal (not measured)</span></label>
+          <span class="mode-hint" id="strcmp-modeled-hint">If your browser's coarse timer hides the leak, this overlays the ideal shape — work proportional to prefix length. Labeled <em>modeled</em>, never mistaken for a measurement.</span>
+        </div>
         <p id="strcmp-summary" class="chart-summary" aria-live="polite"></p>
         <div id="strcmp-verdict" class="verdict" role="status" aria-live="polite"></div>
-        <details class="chart-data"><summary>Show measured data</summary><div id="strcmp-table"></div></details>
+        <details class="chart-data">
+          <summary>Show measured data and distribution</summary>
+          <figure class="chart-figure">
+            <figcaption id="strcmp-hist-cap" class="chart-caption">Distribution view: two curves that <strong>overlap</strong> = no timing difference; a curve <strong>shifted right</strong> = slower = leak.</figcaption>
+            <canvas id="strcmp-hist" aria-label="Histogram comparing vulnerable and constant-time string comparison timings" role="img" aria-describedby="strcmp-hist-cap"></canvas>
+          </figure>
+          <div id="strcmp-table"></div>
+        </details>
       </section>
 
       <section class="panel" aria-labelledby="panel2-title">
@@ -148,11 +183,15 @@ function renderAppShell(): void {
           <button id="hmac-run" type="button">Measure MAC prefix timing</button>
         </div>
         <div id="hmac-error" class="error" role="status" aria-live="assertive"></div>
-        <canvas id="hmac-line" aria-label="Line chart of HMAC timing by correct prefix length" role="img"></canvas>
+        <figure class="chart-figure">
+          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each correct byte is confirmed faster to reject the next — leak the MAC one byte at a time. A <strong>flat line</strong> is the constant-time compare.</figcaption>
+          <canvas id="hmac-line" aria-label="Line chart of HMAC timing by correct prefix length" role="img" aria-describedby="hmac-cap"></canvas>
+        </figure>
         <p id="hmac-summary" class="chart-summary" aria-live="polite"></p>
         <div id="hmac-verdict" class="verdict" role="status" aria-live="polite"></div>
         <details class="chart-data"><summary>Show measured data</summary><div id="hmac-table"></div></details>
         <p class="panel-note">Reference: Django timing attack CVEs and the history of constant-time comparison APIs such as Python <code>hmac.compare_digest</code>.</p>
+        <p class="panel-note panel-caveat"><strong>Honest caveat:</strong> the "constant-time" JS here has a uniform <em>instruction schedule</em>, but JavaScript is not truly constant-time at the engine level — JIT, GC, and branch prediction can still add data-dependent variation. In production, use a vetted native primitive.</p>
       </section>
 
       <section class="panel" aria-labelledby="panel3-title">
@@ -162,7 +201,25 @@ function renderAppShell(): void {
         </div>
         <p class="panel-text">Square-and-multiply uses a secret-dependent branch on each exponent bit. Montgomery ladder keeps operation count uniform.</p>
         <button id="rsa-run" type="button">Generate toy RSA key and measure bit leakage</button>
-        <canvas id="rsa-hist" aria-label="Histogram of RSA timing under different private key bit patterns" role="img"></canvas>
+
+        <div class="mechanism" id="rsa-mech" aria-labelledby="rsa-mech-title">
+          <div class="mechanism-head">
+            <h3 id="rsa-mech-title" class="mechanism-title">Why the ladder is uniform — bit by bit</h3>
+            <button id="rsa-mech-play" class="mech-play" type="button" aria-label="Replay the square-and-multiply animation">▶ Replay</button>
+          </div>
+          <p class="mechanism-lead">These are the low bits of the generated private exponent. Naive square-and-multiply does an extra multiply (<code>×</code>) only on a <strong>1</strong>-bit, so its multiply count equals the secret's Hamming weight. The ladder does one square and one multiply on <em>every</em> bit.</p>
+          <div class="mech-bitrow" data-role="bit-row" role="img" aria-label="Exponent bits; ones trigger an extra multiply"></div>
+          <div class="mech-counters" aria-live="polite">
+            <span class="mech-counter mech-counter--vuln">Naive (leaks): <strong data-role="naive-tally">—</strong></span>
+            <span class="mech-counter mech-counter--ct">Ladder (uniform): <strong data-role="ladder-tally">—</strong></span>
+          </div>
+          <p class="mech-status" data-role="exp-status" aria-live="polite"></p>
+        </div>
+
+        <figure class="chart-figure">
+          <figcaption id="rsa-cap" class="chart-caption">What you are looking at: timing distributions per method and secret bit. If the two <strong>naive</strong> curves separate but the two <strong>ladder</strong> curves overlap, the naive branch leaks the bit and the ladder does not.</figcaption>
+          <canvas id="rsa-hist" aria-label="Histogram of RSA timing under different private key bit patterns" role="img" aria-describedby="rsa-cap"></canvas>
+        </figure>
         <p id="rsa-summary" class="chart-summary" aria-live="polite"></p>
         <div id="rsa-verdict" class="verdict" role="status" aria-live="polite"></div>
         <details class="chart-data"><summary>Show measured data</summary><div id="rsa-table"></div></details>
@@ -179,13 +236,17 @@ function renderAppShell(): void {
         </div>
         <p class="panel-text">Cache hits and misses have different access latency. Secret-dependent table lookups can leak information via timing.</p>
         <button id="cache-run" type="button">Measure cached vs uncached memory access</button>
-        <canvas id="cache-hist" aria-label="Histogram of cached and uncached memory access timings" role="img"></canvas>
+        <figure class="chart-figure">
+          <figcaption id="cache-cap" class="chart-caption">What you are looking at: access-time distributions for data already in cache vs. evicted. A <strong>right-shifted uncached</strong> curve means cache state changes latency — and secret-dependent lookups leak through it.</figcaption>
+          <canvas id="cache-hist" aria-label="Histogram of cached and uncached memory access timings" role="img" aria-describedby="cache-cap"></canvas>
+        </figure>
         <div class="cache-grid" aria-label="Cache hierarchy timing diagram" role="img">
           <div><strong>L1</strong><span id="l1-v">~1 ns</span></div>
           <div><strong>L2</strong><span id="l2-v">~4 ns</span></div>
           <div><strong>L3</strong><span id="l3-v">~12 ns</span></div>
           <div><strong>DRAM</strong><span id="dram-v">~80 ns</span></div>
         </div>
+        <p class="panel-note panel-caveat"><strong>Note:</strong> the L1–DRAM ladder above is a <em>fixed reference diagram</em> of typical hardware latencies, not values measured in your browser. The measured result is the cached-vs-uncached chart; browsers cannot expose real cache-line timing to JavaScript.</p>
         <p id="cache-summary" class="chart-summary" aria-live="polite"></p>
         <div id="cache-verdict" class="verdict" role="status" aria-live="polite"></div>
         <details class="chart-data"><summary>Show measured data</summary><div id="cache-table"></div></details>
@@ -201,6 +262,7 @@ function renderAppShell(): void {
           <li>Always use constant-time comparison for MACs and passwords.</li>
           <li>Use hardware crypto (AES-NI, WebCrypto) over software table implementations.</li>
         </ol>
+        <p class="panel-note panel-caveat"><strong>Caveat for this demo:</strong> the constant-time code here fixes the instruction schedule (no secret-dependent branch, loop, or memory access), which is the property being taught — but a managed runtime like JavaScript is not guaranteed constant-time end-to-end. Real deployments rely on audited native primitives (libsodium, BoringSSL) and, where possible, hardware instructions.</p>
         <ul class="hall" aria-label="Timing attack hall of fame">
           <li>Kocher 1996 — RSA and Diffie-Hellman timing leakage.</li>
           <li>Bernstein 2005 — AES cache timing.</li>
@@ -243,9 +305,22 @@ function wireStringPanel(): () => Promise<void> {
   const run = byId<HTMLButtonElement>("strcmp-run");
   const targetInput = byId<HTMLInputElement>("strcmp-target");
   const guessInput = byId<HTMLInputElement>("strcmp-guess");
-  const canvas = byId<HTMLCanvasElement>("strcmp-hist");
+  const sweepCanvas = byId<HTMLCanvasElement>("strcmp-sweep");
+  const histCanvas = byId<HTMLCanvasElement>("strcmp-hist");
   const summary = byId<HTMLParagraphElement>("strcmp-summary");
   const table = byId<HTMLDivElement>("strcmp-table");
+  const modeledToggle = byId<HTMLInputElement>("strcmp-modeled");
+
+  // Deterministic mechanism animation — the causal core, immune to timer noise.
+  const mechRoot = byId<HTMLDivElement>("strcmp-mech");
+  const mechPlay = byId<HTMLButtonElement>("strcmp-mech-play");
+  const compareAnimator = createCompareAnimator(mechRoot, mechPlay);
+  function refreshMechanism(): void {
+    compareAnimator.render(targetInput.value, guessInput.value);
+  }
+  targetInput.addEventListener("input", refreshMechanism);
+  guessInput.addEventListener("input", refreshMechanism);
+  refreshMechanism();
 
   let stats: ComparisonStats | null = null;
 
@@ -253,18 +328,45 @@ function wireStringPanel(): () => Promise<void> {
     if (!stats) {
       return;
     }
+    // PRIMARY visual: time vs. correct-prefix length — the attack model, made visible.
+    const series: LineSeries[] = [
+      { label: "Vulnerable", points: stats.sweep.map((p) => ({ x: p.matchedPrefix, y: p.vulnerableMean })), color: VULN },
+      { label: "Constant-Time", points: stats.sweep.map((p) => ({ x: p.matchedPrefix, y: p.constantMean })), color: SAFE }
+    ];
+    if (modeledToggle.checked) {
+      // Overlay the ideal signal (work ∝ prefix length), scaled onto the measured
+      // vulnerable range so its SHAPE is comparable. Explicitly modeled, not measured.
+      const measuredMax = Math.max(...stats.sweep.map((p) => p.vulnerableMean), 1e-6);
+      const measuredMin = Math.min(...stats.sweep.map((p) => p.vulnerableMean));
+      const costs = stats.sweep.map((p) => modeledPrefixCost(targetInput.value, p.matchedPrefix));
+      const costMax = Math.max(...costs, 1);
+      const costMin = Math.min(...costs);
+      const costSpan = Math.max(1, costMax - costMin);
+      series.push({
+        label: "Modeled (not measured)",
+        points: stats.sweep.map((p, i) => ({
+          x: p.matchedPrefix,
+          y: measuredMin + ((costs[i] - costMin) / costSpan) * (measuredMax - measuredMin)
+        })),
+        color: "#8a5cff"
+      });
+    }
+    renderLineChart(sweepCanvas, series, "Comparison time by correct leading bytes");
+
     renderHistogram(
-      canvas,
+      histCanvas,
       [
         { label: "Vulnerable", values: stats.vulnerableSamples, color: VULN },
         { label: "Constant-Time", values: stats.constantSamples, color: SAFE }
       ],
       "String comparison timing distribution"
     );
+
+    const sweepGain = stats.vulnerableLongPrefixMs - stats.vulnerableShortPrefixMs;
     summary.textContent =
       `Prefix match length: ${stats.prefixMatchLength} chars. ` +
-      `Vulnerable mean ${stats.vulnerableMean.toFixed(4)} ms (sigma ${stats.vulnerableStdDev.toFixed(4)}); ` +
-      `constant-time mean ${stats.constantMean.toFixed(4)} ms (sigma ${stats.constantStdDev.toFixed(4)}). ` +
+      `Each extra correct byte shifts vulnerable runtime by ~${(sweepGain / Math.max(1, stats.sweep.length)).toFixed(4)} ms — leak the secret one byte at a time. ` +
+      `Constant-time mean ${stats.constantMean.toFixed(4)} ms (sigma ${stats.constantStdDev.toFixed(4)}). ` +
       `${stats.iterationsPerMode.toLocaleString()} real comparisons per mode via performance.now().`;
     setVerdict("strcmp-verdict", stringComparisonVerdict(stats.vulnerableShortPrefixMs, stats.vulnerableLongPrefixMs));
     renderDataTable(
@@ -275,9 +377,11 @@ function wireStringPanel(): () => Promise<void> {
     );
   }
   redraws.push(draw);
+  modeledToggle.addEventListener("change", draw);
 
   async function execute(): Promise<void> {
     stats = benchmarkStringComparisons(targetInput.value, guessInput.value, 10000);
+    refreshMechanism();
     draw();
   }
 
@@ -347,12 +451,20 @@ function wireRsaPanel(): () => Promise<void> {
   const summary = byId<HTMLParagraphElement>("rsa-summary");
   const table = byId<HTMLDivElement>("rsa-table");
 
+  // Deterministic bit-schedule animation for the generated private exponent.
+  const mechRoot = byId<HTMLDivElement>("rsa-mech");
+  const mechPlay = byId<HTMLButtonElement>("rsa-mech-play");
+  const exponentAnimator = createExponentAnimator(mechRoot, mechPlay);
+  // Seed with a representative pattern until a real key is generated on run.
+  exponentAnimator.render(0b1011010011);
+
   let stats: RsaTimingStats | null = null;
 
   function draw(): void {
     if (!stats) {
       return;
     }
+    exponentAnimator.render(stats.exponentLowBits);
     renderHistogram(
       canvas,
       [

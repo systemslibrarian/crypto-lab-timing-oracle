@@ -388,6 +388,242 @@ button[aria-busy="true"] {
   font-weight: 600;
 }
 
+/* ------------------------------------------------------------------ *
+ * Mechanism animations (deterministic, timer-free teaching visuals)
+ * ------------------------------------------------------------------ */
+
+.mechanism {
+  margin-top: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+
+.mechanism-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.mechanism-title {
+  font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.mechanism-lead {
+  margin: 0.45rem 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.mech-play {
+  width: auto;
+  min-height: 44px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.mech-grid {
+  display: grid;
+  gap: 0.35rem;
+  overflow-x: auto;
+}
+
+.mech-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.mech-rowlabel {
+  flex: 0 0 auto;
+  width: 3.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.mech-cell,
+.mech-bit {
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  position: relative;
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* status marks rendered above each cell so state is icon+text+colour, not colour alone */
+.mech-cell[data-mark]:not([data-mark=""])::after,
+.mech-bit[data-mark]:not([data-mark=""])::after {
+  content: attr(data-mark);
+  position: absolute;
+  top: -0.85rem;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.mech-cell--idle {
+  opacity: 0.75;
+}
+
+.mech-cell--match {
+  background: color-mix(in srgb, var(--ok) 30%, var(--panel));
+  border-color: var(--ok);
+  color: var(--text);
+}
+
+.mech-cell--mismatch {
+  background: color-mix(in srgb, var(--danger) 34%, var(--panel));
+  border-color: var(--danger);
+  color: var(--text);
+}
+
+.mech-cell--skipped {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.mech-cell--scanned {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.mech-cell[data-mark="✓"]::after {
+  color: var(--ok);
+}
+.mech-cell[data-mark="✗"]::after {
+  color: var(--danger);
+}
+
+.mech-counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+}
+
+.mech-counter {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.mech-counter strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.mech-status {
+  margin: 0.55rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.mech-legend {
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.mech-key {
+  white-space: nowrap;
+}
+.mech-key--match {
+  color: var(--ok);
+}
+.mech-key--mismatch {
+  color: var(--danger);
+}
+
+.mech-bitrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.mech-bit--1 {
+  background: color-mix(in srgb, var(--accent-2) 24%, var(--panel));
+  border-color: var(--accent-2);
+}
+
+.mech-bit--active {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.mech-bit[data-mark="×"]::after {
+  color: var(--accent-2);
+}
+
+/* Plain-language chart captions + modeled-signal toggle */
+.chart-figure {
+  margin: 0;
+}
+
+.chart-caption {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 0.6rem 0 0;
+}
+
+.chart-caption strong {
+  color: var(--text);
+}
+
+.mode-toggle {
+  margin-top: 0.6rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.mode-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  color: var(--text);
+  min-height: 44px;
+}
+
+.mode-check input {
+  width: auto;
+  min-height: auto;
+}
+
+.mode-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.panel-caveat {
+  border-left: 3px solid var(--warn);
+  padding-left: 0.6rem;
+}
+
 .cache-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

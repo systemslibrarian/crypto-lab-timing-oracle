@@ -93,15 +93,25 @@ describe("initUi integration", () => {
     for (const id of [
       "strcmp-verdict",
       "strcmp-table",
+      "strcmp-sweep",
+      "strcmp-mech",
+      "strcmp-modeled",
       "hmac-verdict",
       "hmac-table",
       "rsa-verdict",
       "rsa-table",
+      "rsa-mech",
       "cache-verdict",
       "cache-table"
     ]) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
+    // The deterministic compare animation must render byte cells for the guess.
+    const guessCells = document.querySelectorAll("#strcmp-mech [data-role=guess-row] .mech-cell");
+    expect(guessCells.length).toBeGreaterThan(0);
+    // The RSA bit-schedule animation must render exponent bit cells.
+    const bitCells = document.querySelectorAll("#rsa-mech [data-role=bit-row] .mech-bit");
+    expect(bitCells.length).toBeGreaterThan(0);
   });
 
   it("runs the string panel end-to-end: chart data table and a verdict are produced", async () => {

@@ -10,6 +10,8 @@ export type RsaTimingStats = {
   ladderBit0Mean: number;
   ladderBit1Mean: number;
   webCryptoSignMeanMs: number;
+  /** Low bits of the actual generated private exponent d, for the bit-schedule animation. */
+  exponentLowBits: number;
 };
 
 type ToyRsaKeypair = {
@@ -209,6 +211,10 @@ export async function benchmarkRsaTiming(samples = 140): Promise<RsaTimingStats>
   const sanityB = modPowNaive(sanityA, key.d, key.n);
   const keyDescription = `Toy RSA key: p=${key.p}, q=${key.q}, n=${key.n}, e=${key.e}, d bits=${exponentBits}, decrypt check=${sanityB}`;
   const webCryptoSignMeanMs = await benchmarkWebCryptoRsaSign();
+  // Low 10 bits of the real private exponent, so the animation shows the actual
+  // generated secret's schedule (not a canned pattern). Kept small so the row of
+  // squares fits and steps at a watchable pace.
+  const exponentLowBits = Number(key.d & 0x3ffn);
 
   return {
     keyDescription,
@@ -221,6 +227,7 @@ export async function benchmarkRsaTiming(samples = 140): Promise<RsaTimingStats>
     naiveBit1Mean: mean(naiveBit1Samples),
     ladderBit0Mean: mean(ladderBit0Samples),
     ladderBit1Mean: mean(ladderBit1Samples),
-    webCryptoSignMeanMs
+    webCryptoSignMeanMs,
+    exponentLowBits
   };
 }
