@@ -166,7 +166,11 @@ export function createCompareAnimator(root: HTMLElement, playButton: HTMLButtonE
   }
 
   playButton.addEventListener("click", () => {
-    respectMotion = true; // an explicit replay honours reduced-motion by jumping to the end
+    // An explicit press of Replay is a request to SEE the animation, so it
+    // deliberately bypasses the reduced-motion check for this one run. (The flag
+    // name reads backwards: setting it true makes prefersReducedMotion() return
+    // false.) Auto-renders on input still jump straight to the end.
+    respectMotion = true;
     render(currentTarget, currentGuess);
     respectMotion = false;
   });

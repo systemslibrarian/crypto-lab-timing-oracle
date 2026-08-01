@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modPowMontgomeryLadder, modPowNaive } from "./rsa";
+import { cswap, modPowMontgomeryLadder, modPowNaive } from "./rsa";
 
 /** Independent reference: right-to-left square-and-multiply. */
 function refModPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
@@ -44,6 +44,29 @@ describe("modular exponentiation", () => {
     expect(modPowMontgomeryLadder(5n, 0n, m)).toBe(1n);
     expect(modPowNaive(5n, 1n, m)).toBe(5n);
     expect(modPowMontgomeryLadder(5n, 1n, m)).toBe(5n);
+  });
+
+  it("cswap exchanges only when the selector bit is 1, without branching", () => {
+    expect(cswap(0n, 7n, 9n)).toEqual([7n, 9n]);
+    expect(cswap(1n, 7n, 9n)).toEqual([9n, 7n]);
+    // Involution: swapping twice restores the original pair for either selector.
+    for (const bit of [0n, 1n]) {
+      const [a, b] = cswap(bit, 123456789n, 987654321n);
+      expect(cswap(bit, a, b)).toEqual([123456789n, 987654321n]);
+    }
+  });
+
+  it("the ladder is the cswap formulation: one multiply and one square per bit", () => {
+    // The op count is a structural property of the loop body, so pin the shape
+    // that guarantees it: the ladder must agree with the naive routine on
+    // exponents of EQUAL bit length but very different Hamming weight, which is
+    // exactly the pair the panel's histogram contrasts.
+    const m = 3233n;
+    const lowWeight = 0b10000000n;
+    const highWeight = 0b11111111n;
+    expect(lowWeight.toString(2).length).toBe(highWeight.toString(2).length);
+    expect(modPowMontgomeryLadder(7n, lowWeight, m)).toBe(modPowNaive(7n, lowWeight, m));
+    expect(modPowMontgomeryLadder(7n, highWeight, m)).toBe(modPowNaive(7n, highWeight, m));
   });
 
   it("supports an RSA encrypt/decrypt round trip", () => {

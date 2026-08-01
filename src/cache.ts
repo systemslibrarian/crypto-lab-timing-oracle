@@ -1,12 +1,19 @@
+/**
+ * Only what this benchmark actually measures.
+ *
+ * This type used to also carry l1EstimateNs / l2EstimateNs / l3EstimateNs /
+ * dramEstimateNs — hardcoded 1/4/12/80 returned from a function named
+ * `benchmarkCacheTiming`, which the UI then wrote into the L1–DRAM cells after
+ * the user pressed "Measure". The numbers were never computed from anything, so
+ * a field name ending in "Estimate" coming out of a benchmark was a claim the
+ * code did not support. The ladder is a fixed reference diagram and now lives
+ * only in the markup that says so.
+ */
 export type CacheTimingStats = {
   cachedSamples: number[];
   uncachedSamples: number[];
   cachedMean: number;
   uncachedMean: number;
-  l1EstimateNs: number;
-  l2EstimateNs: number;
-  l3EstimateNs: number;
-  dramEstimateNs: number;
 };
 
 function mean(values: number[]): number {
@@ -61,10 +68,6 @@ export function benchmarkCacheTiming(samples = 160): CacheTimingStats {
     cachedSamples,
     uncachedSamples,
     cachedMean: mean(cachedSamples),
-    uncachedMean: mean(uncachedSamples),
-    l1EstimateNs: 1,
-    l2EstimateNs: 4,
-    l3EstimateNs: 12,
-    dramEstimateNs: 80
+    uncachedMean: mean(uncachedSamples)
   };
 }

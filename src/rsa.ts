@@ -38,6 +38,29 @@ export function modPowNaive(base: bigint, exponent: bigint, modulus: bigint): bi
   return result;
 }
 
+/**
+ * Branchless conditional swap. `swap` must be 0n or 1n; multiplying the XOR
+ * difference by it yields either the difference or zero, so the exchange happens
+ * with no data-dependent control flow.
+ */
+export function cswap(swap: bigint, a: bigint, b: bigint): [bigint, bigint] {
+  const delta = (a ^ b) * swap;
+  return [a ^ delta, b ^ delta];
+}
+
+/**
+ * Montgomery ladder — EXACTLY one multiply and one square per exponent bit,
+ * which is what the page and the mechanism animation both claim it does.
+ *
+ * The previous implementation selected arithmetically instead of swapping, so
+ * it computed r0*r1, r0*r0 AND r1*r1 — three modular multiplications per bit,
+ * not two. Its operation count was still bit-independent (the taught property
+ * held), but "one square and one multiply on every bit" described an algorithm
+ * the benchmarked code was not running, and the modeled counts in mechanism.ts
+ * (one of each per bit) did not match the routine the histogram timed.
+ *
+ * Invariant: r1 = r0 * base, i.e. r0 = base^k and r1 = base^(k+1).
+ */
 export function modPowMontgomeryLadder(base: bigint, exponent: bigint, modulus: bigint): bigint {
   let r0 = 1n;
   let r1 = base % modulus;
@@ -45,12 +68,10 @@ export function modPowMontgomeryLadder(base: bigint, exponent: bigint, modulus: 
 
   for (let index = bitLength - 1; index >= 0; index -= 1) {
     const bit = (exponent >> BigInt(index)) & 1n;
-    const t0 = (r0 * r1) % modulus;
-    const t1 = (r0 * r0) % modulus;
-    const t2 = (r1 * r1) % modulus;
-    const inv = 1n - bit;
-    r0 = (t0 * bit + t1 * inv) % modulus;
-    r1 = (t2 * bit + t0 * inv) % modulus;
+    [r0, r1] = cswap(bit, r0, r1);
+    r1 = (r0 * r1) % modulus; // the multiply
+    r0 = (r0 * r0) % modulus; // the square
+    [r0, r1] = cswap(bit, r0, r1);
   }
 
   return r0;
@@ -101,9 +122,21 @@ function isPrime(n: bigint): boolean {
   return true;
 }
 
+/** Uniform integer in [0, bound) from the platform CSPRNG (never Math.random). */
+function randomBelow(bound: number): number {
+  const buffer = new Uint32Array(1);
+  const limit = Math.floor(0x100000000 / bound) * bound; // reject to avoid modulo bias
+  for (;;) {
+    crypto.getRandomValues(buffer);
+    if (buffer[0] < limit) {
+      return buffer[0] % bound;
+    }
+  }
+}
+
 function randomPrime(min = 200n, max = 500n): bigint {
   for (let attempts = 0; attempts < 5000; attempts += 1) {
-    const candidate = BigInt(Math.floor(Math.random() * Number(max - min))) + min;
+    const candidate = BigInt(randomBelow(Number(max - min))) + min;
     const odd = candidate % 2n === 0n ? candidate + 1n : candidate;
     if (isPrime(odd)) {
       return odd;
@@ -207,9 +240,17 @@ export async function benchmarkRsaTiming(samples = 140): Promise<RsaTimingStats>
     ladderBit1Samples.push(l1End - l1Start);
   }
 
+  // Actually check the round trip rather than printing its output and calling
+  // that a "check": encrypt with e, decrypt with d, and compare to the input.
+  // The ladder is included so the two exponentiation routines the panel times
+  // are both shown to be computing the same function.
   const sanityA = modPowNaive(base, key.e, key.n);
   const sanityB = modPowNaive(sanityA, key.d, key.n);
-  const keyDescription = `Toy RSA key: p=${key.p}, q=${key.q}, n=${key.n}, e=${key.e}, d bits=${exponentBits}, decrypt check=${sanityB}`;
+  const sanityLadder = modPowMontgomeryLadder(sanityA, key.d, key.n);
+  const roundTripOk = sanityB === base && sanityLadder === base;
+  const keyDescription =
+    `Toy RSA key: p=${key.p}, q=${key.q}, n=${key.n}, e=${key.e}, d bits=${exponentBits}, ` +
+    `encrypt-then-decrypt round trip=${roundTripOk ? "PASS" : "FAIL"} (naive and ladder both recover ${base})`;
   const webCryptoSignMeanMs = await benchmarkWebCryptoRsaSign();
   // Low 10 bits of the real private exponent, so the animation shows the actual
   // generated secret's schedule (not a canned pattern). Kept small so the row of

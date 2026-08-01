@@ -240,7 +240,7 @@ function renderAppShell(): void {
           <figcaption id="cache-cap" class="chart-caption">What you are looking at: access-time distributions for data already in cache vs. evicted. A <strong>right-shifted uncached</strong> curve means cache state changes latency — and secret-dependent lookups leak through it.</figcaption>
           <canvas id="cache-hist" aria-label="Histogram of cached and uncached memory access timings" role="img" aria-describedby="cache-cap"></canvas>
         </figure>
-        <div class="cache-grid" aria-label="Cache hierarchy timing diagram" role="img">
+        <div class="cache-grid" aria-label="Reference diagram of typical memory-hierarchy latencies. These are textbook figures, not measurements from this machine." role="img">
           <div><strong>L1</strong><span id="l1-v">~1 ns</span></div>
           <div><strong>L2</strong><span id="l2-v">~4 ns</span></div>
           <div><strong>L3</strong><span id="l3-v">~12 ns</span></div>
@@ -362,10 +362,21 @@ function wireStringPanel(): () => Promise<void> {
       "String comparison timing distribution"
     );
 
+    // Per-byte cost of one comparison. The measured endpoints are batch totals
+    // over `loopsPerTimedBatch` comparisons and span `bytesSpanned` characters,
+    // so both divisors matter. An earlier version divided the raw batch-time
+    // delta by stats.sweep.length — the number of chart points — and labelled
+    // the result "ms per extra correct byte", which it was not.
     const sweepGain = stats.vulnerableLongPrefixMs - stats.vulnerableShortPrefixMs;
+    const bytesSpanned = Math.max(1, stats.longPrefixChars - stats.shortPrefixChars);
+    const msPerByteBatch = sweepGain / bytesSpanned;
+    const usPerByteSingle = (msPerByteBatch / stats.loopsPerTimedBatch) * 1000;
     summary.textContent =
       `Prefix match length: ${stats.prefixMatchLength} chars. ` +
-      `Each extra correct byte shifts vulnerable runtime by ~${(sweepGain / Math.max(1, stats.sweep.length)).toFixed(4)} ms — leak the secret one byte at a time. ` +
+      `Going from ${stats.shortPrefixChars} to ${stats.longPrefixChars} correct leading bytes changed the vulnerable batch time by ` +
+      `${sweepGain.toFixed(4)} ms over ${stats.loopsPerTimedBatch.toLocaleString()} comparisons — ` +
+      `~${usPerByteSingle.toFixed(5)} microseconds per extra correct byte per comparison. ` +
+      `That is the per-guess signal an attacker averages over to leak the secret one byte at a time. ` +
       `Constant-time mean ${stats.constantMean.toFixed(4)} ms (sigma ${stats.constantStdDev.toFixed(4)}). ` +
       `${stats.iterationsPerMode.toLocaleString()} real comparisons per mode via performance.now().`;
     setVerdict("strcmp-verdict", stringComparisonVerdict(stats.vulnerableShortPrefixMs, stats.vulnerableLongPrefixMs));
@@ -537,10 +548,9 @@ function wireCachePanel(): () => Promise<void> {
       ],
       "Cached vs uncached access timing"
     );
-    byId<HTMLSpanElement>("l1-v").textContent = `~${stats.l1EstimateNs} ns`;
-    byId<HTMLSpanElement>("l2-v").textContent = `~${stats.l2EstimateNs} ns`;
-    byId<HTMLSpanElement>("l3-v").textContent = `~${stats.l3EstimateNs} ns`;
-    byId<HTMLSpanElement>("dram-v").textContent = `~${stats.dramEstimateNs} ns`;
+    // The L1–DRAM ladder is deliberately NOT touched here. It is a static
+    // reference diagram of typical hardware latencies; rewriting those cells on
+    // every run made canned constants look like this machine's measurements.
     summary.textContent =
       `Measured cached mean=${stats.cachedMean.toFixed(4)} ms, uncached mean=${stats.uncachedMean.toFixed(4)} ms. ` +
       `Timing differs because cache-line residency changes memory latency. WebCrypto AES routes to hardened native implementations.`;
