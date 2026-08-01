@@ -13,6 +13,15 @@
      --warn for the border/swatch. #9a5f00 on the 16% tint is only 4.06:1. */
   --warn-text: #7a4a00;
   --border: #b6a486;
+  /* Control boundaries only — the `button, input` rule. The input is filled with
+     --panel, the exact colour of the card behind it (1.00:1), so its border is the
+     only thing that makes the control visible, and WCAG 2.1 SC 1.4.11 requires
+     3:1. --border measured 2.34:1 at best here; --border-strong is 4.37:1 on
+     --panel, 3.97:1 on --bg and 3.35:1 on --bg-soft. The button shares the same
+     rule as the input, so it comes along rather than leaving two adjacent controls
+     with visibly different borders. --border stays as-is for the decorative rules
+     (card and panel outlines, hero, chips, table rules). */
+  --border-strong: #81745f;
   --focus: #0059d6;
   --shadow: 0 14px 34px rgba(36, 26, 13, 0.16);
   --on-accent: #ffffff;
@@ -35,6 +44,10 @@
   --warn: #ffd07c;
   --warn-text: #ffd07c;
   --border: #7990ac;
+  /* Dark already clears the bar — 4.88:1 on --chart-surface, 4.81:1 on --bg,
+     4.08:1 on --panel, 3.88:1 on --bg-soft — so --border-strong keeps the same
+     value here and the dark theme is visually unchanged. */
+  --border-strong: #7990ac;
   --focus: #7bc1ff;
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
   --on-accent: #08221e;
@@ -208,7 +221,8 @@ input {
   width: 100%;
   min-height: 44px;
   border-radius: 0.7rem;
-  border: 1px solid var(--border);
+  /* WCAG 2.1 SC 1.4.11 — see --border-strong. */
+  border: 1px solid var(--border-strong);
   padding: 0.65rem 0.75rem;
   background: var(--panel);
   color: var(--text);
