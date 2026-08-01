@@ -184,7 +184,7 @@ function renderAppShell(): void {
         </div>
         <div id="hmac-error" class="error" role="status" aria-live="assertive"></div>
         <figure class="chart-figure">
-          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each correct byte is confirmed faster to reject the next — leak the MAC one byte at a time. A <strong>flat line</strong> is the constant-time compare.</figcaption>
+          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each extra correct byte makes the early-exit compare run one step further before rejecting, so a <em>slower</em> response marks a correct byte — leak the MAC one byte at a time. A <strong>flat line</strong> is the constant-time compare.</figcaption>
           <canvas id="hmac-line" aria-label="Line chart of HMAC timing by correct prefix length" role="img" aria-describedby="hmac-cap"></canvas>
         </figure>
         <p id="hmac-summary" class="chart-summary" aria-live="polite"></p>
