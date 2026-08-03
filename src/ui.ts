@@ -96,6 +96,27 @@ function setVerdict(id: string, verdict: Verdict): void {
   node.innerHTML = `<strong>${icon} ${verdict.label}.</strong> ${verdict.detail}`;
 }
 
+/**
+ * A verdict describes ONE measurement of ONE set of inputs. When the user edits
+ * the inputs afterwards, the rendered verdict, summary, chart and table all
+ * describe a run that no longer exists — a "Leak detected ⚠" panel sitting above
+ * a secret it was never measured against. Every panel with editable controls
+ * therefore invalidates its own output on input, replacing it with this.
+ */
+const STALE_VERDICT: Verdict = {
+  tone: "inconclusive",
+  label: "Inputs changed — not measured yet",
+  detail: "These controls changed after the last run, so the previous result no longer describes them. Press the run button to measure the current inputs."
+};
+
+/** Blank a chart so a stale plot cannot outlive the inputs it was drawn from. */
+function clearCanvas(canvas: HTMLCanvasElement): void {
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
 function renderAppShell(): void {
   const app = byId<HTMLDivElement>("app");
   app.innerHTML = `
@@ -318,11 +339,28 @@ function wireStringPanel(): () => Promise<void> {
   function refreshMechanism(): void {
     compareAnimator.render(targetInput.value, guessInput.value);
   }
-  targetInput.addEventListener("input", refreshMechanism);
-  guessInput.addEventListener("input", refreshMechanism);
-  refreshMechanism();
-
   let stats: ComparisonStats | null = null;
+
+  /** Drop a measurement whose inputs have since changed (see STALE_VERDICT). */
+  function invalidate(): void {
+    if (!stats) {
+      return;
+    }
+    stats = null;
+    summary.textContent = "";
+    table.innerHTML = "";
+    clearCanvas(sweepCanvas);
+    clearCanvas(histCanvas);
+    setVerdict("strcmp-verdict", STALE_VERDICT);
+  }
+
+  function onInput(): void {
+    refreshMechanism();
+    invalidate();
+  }
+  targetInput.addEventListener("input", onInput);
+  guessInput.addEventListener("input", onInput);
+  refreshMechanism();
 
   function draw(): void {
     if (!stats) {
@@ -411,6 +449,21 @@ function wireHmacPanel(): () => Promise<void> {
 
   let stats: HmacTimingStats | null = null;
 
+  /** Drop a measurement whose inputs have since changed (see STALE_VERDICT). */
+  function invalidate(): void {
+    if (!stats) {
+      return;
+    }
+    stats = null;
+    summary.textContent = "";
+    table.innerHTML = "";
+    error.textContent = "";
+    clearCanvas(canvas);
+    setVerdict("hmac-verdict", STALE_VERDICT);
+  }
+  messageInput.addEventListener("input", invalidate);
+  forgedInput.addEventListener("input", invalidate);
+
   function draw(): void {
     if (!stats) {
       return;
@@ -449,6 +502,15 @@ function wireHmacPanel(): () => Promise<void> {
       stats = null;
       error.textContent = caught instanceof Error ? caught.message : "HMAC benchmark failed.";
       summary.textContent = "HMAC timing run failed; adjust forged MAC hex and retry.";
+      table.innerHTML = "";
+      clearCanvas(canvas);
+      // Without this the panel keeps the PREVIOUS run's verdict — a "Leak
+      // detected" banner sitting on top of a run that never happened.
+      setVerdict("hmac-verdict", {
+        tone: "inconclusive",
+        label: "Run failed — nothing measured",
+        detail: `${error.textContent} No timing was recorded this run; fix the input above and press the button again.`
+      });
     }
   }
 
@@ -515,11 +577,16 @@ function wireRsaPanel(): () => Promise<void> {
       draw();
     } catch (caught) {
       stats = null;
-      summary.textContent = caught instanceof Error ? caught.message : "RSA benchmark failed.";
+      const reason = caught instanceof Error ? caught.message : "RSA benchmark failed.";
+      summary.textContent = reason;
+      table.innerHTML = "";
+      clearCanvas(canvas);
       setVerdict("rsa-verdict", {
         tone: "inconclusive",
         label: "RSA run failed",
-        detail: "Could not generate a toy key this run. Press the button to try again."
+        // Name the actual cause: the old text always blamed key generation even
+        // when the failure came from somewhere else in the run.
+        detail: `${reason} Nothing was measured this run; press the button to try again.`
       });
     }
   }

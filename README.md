@@ -63,11 +63,14 @@ More broadly: browser timers are intentionally coarsened after Spectre mitigatio
 ## Verification
 
 ```bash
-npm test       # run the vitest unit + DOM integration suite
-npm run build  # type-check (tsc) and produce a production build in dist/
+npm test           # run the vitest unit + DOM integration suite
+npm run build      # type-check (tsc) and produce a production build in dist/
+npm run test:e2e   # build, serve dist/, and drive it in Chromium (claims + a11y)
 ```
 
 The crypto primitives (constant-time comparison, hex parsing, the timing-leak verdicts, and the statistics helpers) are covered by unit tests, and a happy-dom integration test boots the full UI headless. Tests run in CI before every GitHub Pages deploy. No environment variables are required.
+
+`npm run test:e2e` runs two browser suites against the built bundle: `e2e/a11y.spec.ts` (WCAG A/AA in both themes) and `e2e/claims.spec.ts`, which checks that what the page says matches what it measured. Each panel's verdict is recomputed from the numbers that panel itself rendered — never compared against a fixed sentence — the mechanism counters are checked for internal consistency (inspected + skipped bytes = secret length; naive multiplies = the exponent's Hamming weight), the displayed MAC is re-derived independently with WebCrypto, and every failure path (malformed MAC hex, a fault-injected WebCrypto failure) must both reach its failure state and name its cause. Any uncaught page exception fails the run.
 
 ---
 

@@ -96,12 +96,12 @@ export async function benchmarkHmacVerification(
   const expectedMac = await hmacSha256(message);
   const expectedMacHex = bytesToHex(expectedMac);
 
-  let provided: Uint8Array;
-  try {
-    provided = hexToBytes(providedMacHex);
-  } catch {
-    provided = new Uint8Array(expectedMac.length);
-  }
+  // Malformed hex is surfaced, not swallowed. This used to fall back to an
+  // all-zero MAC, so typing "nothex!!" produced a normal-looking run whose
+  // reported providedMacHex was a value the user never entered, and the panel's
+  // error region (and its "adjust forged MAC hex and retry" message) could never
+  // be reached by any input.
+  const provided = hexToBytes(providedMacHex);
 
   const userVulnerableStart = performance.now();
   vulnerableVerifyBytes(expectedMac, provided);
