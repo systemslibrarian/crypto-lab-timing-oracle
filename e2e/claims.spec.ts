@@ -73,8 +73,36 @@ function num(text: string | null, pattern: RegExp, label: string): number {
   return value;
 }
 
+/**
+ * HMAC-SHA256 of `message` under the panel's public demo key, computed in the
+ * browser independently of the page's own code, so "the panel shows the MAC of
+ * THIS message" is checked against a value the panel did not produce.
+ */
+async function macHex(page: Page, message: string): Promise<string> {
+  return page.evaluate(async (msg) => {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode('crypto-lab-timing-oracle-demo-key'),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(msg)));
+    return Array.from(mac)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }, message);
+}
+
 /** 4-decimal rendering plus float noise; never wide enough to hide a sign flip. */
 const EPS = 0.01;
+
+/** Largest error a rendered decimal can be hiding, from its own precision. */
+function halfUlp(rendered: string): number {
+  const dot = rendered.indexOf('.');
+  return dot < 0 ? 0.5 : 0.5 * 10 ** -(rendered.length - dot - 1);
+}
 
 test('panel 1 mechanism counts the exact bytes the compare loop inspects', async ({ page }) => {
   await openPage(page);
@@ -142,10 +170,20 @@ test('panel 1 verdict follows the timing gap the same panel reported', async ({ 
 
   if (tone?.includes('verdict--leak')) {
     const pct = num(verdict, /rose ~(-?[\d.]+)%/u, 'verdict percentage');
-    // "Leak detected" is only honest if the measured runtime actually ROSE and
-    // cleared the panel's own 15% threshold.
+    // A positive-tone verdict is only honest if the measured runtime actually
+    // ROSE and cleared the panel's own 15% threshold.
     expect(gain, 'leak verdict requires a positive gain').toBeGreaterThan(0);
     expect(pct).toBeGreaterThanOrEqual(15 - EPS * 100);
+    // ...and it must claim only what one threshold crossing can support. This
+    // panel compares two means from a fixed sample count on one loaded machine;
+    // that is evidence of a distinguishable difference here, not a demonstrated
+    // key recovery, and the wording has to say so.
+    expect(verdict, 'leak verdict must not claim the secret was recovered').not.toMatch(
+      /an attacker can recover the secret/iu
+    );
+    expect(verdict, 'leak verdict must disclaim attempting the recovery').toMatch(
+      /never attempts the recovery/u
+    );
   } else {
     const pct = num(verdict, /effect was ~(-?[\d.]+)%/u, 'verdict percentage');
     expect(
@@ -153,6 +191,17 @@ test('panel 1 verdict follows the timing gap the same panel reported', async ({ 
       `inconclusive verdict but gain=${gain} pct=${pct}`
     ).toBe(true);
   }
+
+  // Whichever way it landed, the verdict states the sample count it measured
+  // over, and that count is the one the panel actually collected — a verdict
+  // that named a fixed number would be describing a run it did not perform.
+  const scoped = num(verdict, /Measured over (\d+) samples/u, 'verdict sample count');
+  const perMode = Number(
+    /([\d,]+) real comparisons per mode/u.exec(summary ?? '')?.[1].replace(/,/gu, '') ?? NaN
+  );
+  expect(perMode, 'comparisons per mode').toBeGreaterThan(0);
+  expect(scoped).toBeGreaterThan(0);
+  expect(scoped, 'verdict sample count must not exceed the comparisons performed').toBeLessThanOrEqual(perMode);
 
   // The chart's own data table must cover the sweep the summary describes.
   const rows = await tableRows(page, '#strcmp-table');
@@ -279,6 +328,7 @@ test('panel 4 cache verdict is recomputed from the cached/uncached means it publ
 
   const rows = await tableRows(page, '#cache-table');
   const byLabel = new Map(rows.map((r) => [r[0], Number(r[1])]));
+  const byLabelRaw = new Map(rows.map((r) => [r[0], (r[1] ?? '').trim()]));
   expect([...byLabel.keys()]).toEqual(['Cached', 'Uncached']);
   const cached = byLabel.get('Cached')!;
   const uncached = byLabel.get('Uncached')!;
@@ -296,7 +346,18 @@ test('panel 4 cache verdict is recomputed from the cached/uncached means it publ
     // "Cache state is observable" requires uncached to actually be SLOWER.
     expect(uncached, 'observable cache state requires uncached > cached').toBeGreaterThan(cached);
     const claimed = num(verdict, /~(-?[\d.]+)% slower/u, 'claimed slowdown');
-    expect(Math.abs(claimed - gap * 100), 'verdict % matches the table').toBeLessThan(1.5);
+    // The verdict is computed from full-precision means but printed to whole
+    // percent, and the table rounds the means it shows. Compare inside the
+    // error those two roundings actually allow, rather than a flat window that
+    // is either too loose for large gaps or too tight for sub-millisecond ones.
+    const cachedCell = byLabelRaw.get('Cached')!;
+    const uncachedCell = byLabelRaw.get('Uncached')!;
+    const propagated =
+      ((halfUlp(uncachedCell) + gap * halfUlp(cachedCell)) / Math.max(cached, uncached, 1e-9)) * 100;
+    expect(
+      Math.abs(claimed - gap * 100),
+      `verdict % matches the table (claimed ${claimed}, table ${(gap * 100).toFixed(3)}, allowed ${(0.5 + propagated).toFixed(3)})`,
+    ).toBeLessThanOrEqual(0.5 + propagated + 1e-9);
     expect(claimed).toBeGreaterThanOrEqual(15 - EPS * 100);
   } else {
     expect(
@@ -319,20 +380,23 @@ test('regression: a verdict never outlives the inputs it was measured from', asy
   await settle(page, '#strcmp-run', '#strcmp-verdict');
 
   const measured = await page.locator('#strcmp-verdict').textContent();
-  expect(measured).toMatch(/Leak detected|Signal below noise/u);
+  expect(measured).toMatch(/Timing signal observed this run|Signal below noise/u);
   expect(await page.locator('#strcmp-table table').count()).toBe(1);
 
   // Editing the secret invalidates the run that produced the verdict above.
   await page.fill('#strcmp-target', 'a-completely-different-secret');
   const stale = page.locator('#strcmp-verdict');
   await expect(stale).toContainText('Inputs changed');
-  await expect(stale).not.toContainText('Leak detected');
+  // Assert against the text the panel actually rendered a moment ago, so this
+  // stays a real check if the verdict wording changes again — matching a fixed
+  // label would quietly pass the day that label stops being used.
+  await expect(stale).not.toContainText(measured!.split('.')[0]!.replace(/^[⚠✓•]\s*/u, '').trim());
   await expect(page.locator('#strcmp-summary')).toBeEmpty();
   expect(await page.locator('#strcmp-table table').count(), 'stale data table cleared').toBe(0);
 
   // The control still works afterwards: re-running restores a real verdict.
   await rerun(page, '#strcmp-run');
-  await expect(stale).toContainText(/Leak detected|Signal below noise/u);
+  await expect(stale).toContainText(/Timing signal observed this run|Signal below noise/u);
   expect(await page.locator('#strcmp-table table').count()).toBe(1);
 
   // Same rule for the HMAC panel's message field.
@@ -344,22 +408,68 @@ test('regression: a verdict never outlives the inputs it was measured from', asy
   await rerun(page, '#hmac-run');
   await expect(hmacVerdict).not.toContainText('Inputs changed');
   // ...and the new MAC really is the MAC of the NEW message.
-  const newMac = await page.evaluate(async () => {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      enc.encode('crypto-lab-timing-oracle-demo-key'),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    const mac = new Uint8Array(
-      await crypto.subtle.sign('HMAC', key, enc.encode('POST /api/transfer?amount=999999'))
-    );
-    return Array.from(mac)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-  });
+  const newMac = await macHex(page, 'POST /api/transfer?amount=999999');
+  await expect(page.locator('#hmac-summary')).toContainText(newMac.slice(0, 16));
+});
+
+test('regression: a verdict does not outlive inputs changed while the run is still in flight', async ({
+  page,
+}) => {
+  await openPage(page);
+  await settle(page, '#hmac-run', '#hmac-verdict');
+
+  const OLD = 'transfer 100 to alice';
+  const NEW = 'transfer 999999 to mallory';
+  await page.fill('#hmac-message', OLD);
+  await rerun(page, '#hmac-run');
+  await expect(page.locator('#hmac-summary')).not.toBeEmpty();
+
+  // Compute the reference MACs BEFORE arming the hook below — they go through
+  // crypto.subtle.sign too, and would otherwise spend its one-shot trigger.
+  const oldMac = await macHex(page, OLD);
+  const newMac = await macHex(page, NEW);
+
+  // benchmarkHmacVerification's only await is one WebCrypto round trip, well
+  // under a millisecond, so the interleaving cannot be hit by wall-clock timing
+  // from out here. Hold that real await open and edit the message from inside
+  // it: the window is genuine, this only makes landing in it deterministic.
+  await page.evaluate((next) => {
+    const realSign = crypto.subtle.sign.bind(crypto.subtle);
+    let armed = true;
+    Object.defineProperty(crypto.subtle, 'sign', {
+      configurable: true,
+      value: async (...args: Parameters<typeof realSign>) => {
+        const out = await realSign(...args);
+        if (armed) {
+          armed = false;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          const input = document.getElementById('hmac-message') as HTMLInputElement;
+          input.value = next;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return out;
+      },
+    });
+  }, NEW);
+
+  await page.locator('#hmac-run').click();
+  await expect(page.locator('#hmac-run')).toBeEnabled({ timeout: 90_000 });
+
+  // The run that started against OLD must not publish now that the box says NEW.
+  await expect(page.locator('#hmac-verdict')).toContainText('Inputs changed');
+  await expect(page.locator('#hmac-summary')).toBeEmpty();
+  expect(await page.locator('#hmac-table table').count(), 'stale table cleared').toBe(0);
+  expect(await page.inputValue('#hmac-message')).toBe(NEW);
+
+  // Give the retired run every chance to draw itself late.
+  await page.waitForTimeout(400);
+  const summary = await page.locator('#hmac-summary').innerText();
+  expect(summary, 'the retired run must never render its MAC').not.toContain(oldMac.slice(0, 16));
+  await expect(page.locator('#hmac-verdict')).toContainText('Inputs changed');
+
+  // And the panel is still usable: a fresh run measures the message on screen.
+  await rerun(page, '#hmac-run');
   await expect(page.locator('#hmac-summary')).toContainText(newMac.slice(0, 16));
 });
 
@@ -414,4 +524,90 @@ test('an RSA benchmark failure is reported with its cause and leaves the control
   await expect(page.locator('#rsa-run')).toBeEnabled();
   await rerun(page, '#rsa-run');
   await expect(verdict).toContainText('RSA run failed');
+});
+
+/** Pixel fingerprint of a canvas, so "the overlay was drawn" is checkable. */
+async function canvasHash(page: Page, sel: string): Promise<string> {
+  return page.locator(sel).evaluate((el) => (el as HTMLCanvasElement).toDataURL());
+}
+
+test('the modeled overlay is drawn, labelled as modeled, and changes no measurement', async ({
+  page,
+}) => {
+  await openPage(page);
+  await settle(page, '#strcmp-run', '#strcmp-verdict');
+
+  const toggle = page.locator('#strcmp-modeled');
+  await expect(toggle).not.toBeChecked();
+
+  // The label and the hint both have to say it is not a measurement — this
+  // overlay's whole licence to exist is that it is never mistaken for one.
+  const label = await page.locator('label.mode-check').innerText();
+  expect(label.replace(/\s+/u, ' ')).toContain('Show modeled ideal signal (not measured)');
+  const hint = await page.locator('#strcmp-modeled-hint').innerText();
+  expect(hint).toContain('Labeled');
+  expect(hint).toContain('never mistaken for a measurement');
+
+  // Everything the page reports as measured, before the overlay.
+  const before = {
+    chart: await canvasHash(page, '#strcmp-sweep'),
+    hist: await canvasHash(page, '#strcmp-hist'),
+    summary: await page.locator('#strcmp-summary').innerText(),
+    verdict: await page.locator('#strcmp-verdict').innerText(),
+    table: await tableRows(page, '#strcmp-table'),
+  };
+  expect(before.table.length).toBeGreaterThan(1);
+
+  await toggle.check();
+  await expect(toggle).toBeChecked();
+
+  // The overlay really is drawn: the sweep chart's pixels change.
+  const withOverlay = await canvasHash(page, '#strcmp-sweep');
+  expect(withOverlay, 'toggling the overlay must redraw the sweep chart').not.toBe(before.chart);
+
+  // And nothing measured moves. A modeled curve that edited the reported
+  // numbers would be exactly the dishonesty the label disclaims.
+  expect(await page.locator('#strcmp-summary').innerText()).toBe(before.summary);
+  expect(await page.locator('#strcmp-verdict').innerText()).toBe(before.verdict);
+  expect(await tableRows(page, '#strcmp-table')).toEqual(before.table);
+  expect(await canvasHash(page, '#strcmp-hist')).toBe(before.hist);
+
+  // Turning it back off restores the measured-only chart exactly.
+  await toggle.uncheck();
+  expect(await canvasHash(page, '#strcmp-sweep')).toBe(before.chart);
+  expect(await page.locator('#strcmp-summary').innerText()).toBe(before.summary);
+  expect(await tableRows(page, '#strcmp-table')).toEqual(before.table);
+});
+
+test('replaying a mechanism animation re-runs it without moving the counts it reports', async ({
+  page,
+}) => {
+  await openPage(page);
+  await settle(page, '#strcmp-run', '#strcmp-verdict');
+  await settle(page, '#rsa-run', '#rsa-verdict');
+
+  // The mechanism panels are deterministic functions of their inputs, so a
+  // replay is an animation, never a re-measurement.
+  for (const [root, play] of [
+    ['#strcmp-mech', '#strcmp-mech-play'],
+    ['#rsa-mech', '#rsa-mech-play'],
+  ] as const) {
+    const button = page.locator(play);
+    await button.scrollIntoViewIfNeeded();
+    await expect(button).toBeVisible();
+
+    const before = (await page.locator(root).innerText()).replace(/\s+/gu, ' ').trim();
+    expect(before.length, `${root} must render something to replay`).toBeGreaterThan(0);
+
+    await button.click();
+    // The replay steps through the loop, so wait for it to settle — and settle
+    // it must, on exactly the state it started from.
+    await expect
+      .poll(
+        async () => (await page.locator(root).innerText()).replace(/\s+/gu, ' ').trim(),
+        { timeout: 30_000, message: `${root} changed its reported counts on a replay` },
+      )
+      .toBe(before);
+    await expect(button).toBeEnabled({ timeout: 30_000 });
+  }
 });

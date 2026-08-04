@@ -414,10 +414,10 @@ function wireStringPanel(): () => Promise<void> {
       `Going from ${stats.shortPrefixChars} to ${stats.longPrefixChars} correct leading bytes changed the vulnerable batch time by ` +
       `${sweepGain.toFixed(4)} ms over ${stats.loopsPerTimedBatch.toLocaleString()} comparisons — ` +
       `~${usPerByteSingle.toFixed(5)} microseconds per extra correct byte per comparison. ` +
-      `That is the per-guess signal an attacker averages over to leak the secret one byte at a time. ` +
+      `That is the size of the per-guess signal such an attack would have to average over; this panel measures the signal, it does not attempt the recovery. ` +
       `Constant-time mean ${stats.constantMean.toFixed(4)} ms (sigma ${stats.constantStdDev.toFixed(4)}). ` +
       `${stats.iterationsPerMode.toLocaleString()} real comparisons per mode via performance.now().`;
-    setVerdict("strcmp-verdict", stringComparisonVerdict(stats.vulnerableShortPrefixMs, stats.vulnerableLongPrefixMs));
+    setVerdict("strcmp-verdict", stringComparisonVerdict(stats.vulnerableShortPrefixMs, stats.vulnerableLongPrefixMs, stats.vulnerableSamples.length));
     renderDataTable(
       table,
       "Vulnerable vs constant-time batch time by number of correct leading characters",
@@ -448,10 +448,30 @@ function wireHmacPanel(): () => Promise<void> {
   const table = byId<HTMLDivElement>("hmac-table");
 
   let stats: HmacTimingStats | null = null;
+  /**
+   * Retires in-flight runs as well as rendered ones.
+   *
+   * This is the only panel whose benchmark awaits (WebCrypto importKey/sign
+   * inside benchmarkHmacVerification), so it is the only one with a window
+   * between reading the inputs and publishing the result. Editing the message
+   * inside that window used to leave the old message's MAC and its verdict
+   * rendered beside the new controls: invalidate() returned early because
+   * `stats` was still null, and the run then resolved and drew itself anyway.
+   * The window is only as wide as one WebCrypto round trip — well under a
+   * millisecond here — but an input event merely has to be queued during it,
+   * and a verdict outliving the input that produced it is the exact failure
+   * this panel's stale handling exists to prevent.
+   *
+   * A monotonic generation id makes the ordering explicit: a run publishes only
+   * if no invalidation happened after it started.
+   */
+  let generation = 0;
+  let inFlight = false;
 
   /** Drop a measurement whose inputs have since changed (see STALE_VERDICT). */
   function invalidate(): void {
-    if (!stats) {
+    generation += 1;
+    if (!stats && !inFlight) {
       return;
     }
     stats = null;
@@ -483,7 +503,7 @@ function wireHmacPanel(): () => Promise<void> {
       `Expected MAC (first 16 hex): ${stats.expectedMacHex.slice(0, 16)}… ` +
       `Single-check vulnerable=${stats.vulnerableUserCheckMs.toFixed(6)} ms, constant-time=${stats.constantUserCheckMs.toFixed(6)} ms. ` +
       `Prefix slope vulnerable=${vulnerableSlope.toFixed(4)} ms, constant-time=${constantSlope.toFixed(4)} ms.`;
-    setVerdict("hmac-verdict", hmacVerdict(vulnerableSlope, constantSlope, stats.points[0].vulnerableMean));
+    setVerdict("hmac-verdict", hmacVerdict(vulnerableSlope, constantSlope, stats.points[0].vulnerableMean, stats.vulnerableSeries.length));
     renderDataTable(
       table,
       "Mean verification time by number of correct MAC prefix bytes",
@@ -494,11 +514,22 @@ function wireHmacPanel(): () => Promise<void> {
   redraws.push(draw);
 
   async function execute(): Promise<void> {
+    const myGeneration = ++generation;
+    // Read the inputs once, up front. Everything below reports on THIS pair.
+    const snapshot = { message: messageInput.value, forged: forgedInput.value };
+    inFlight = true;
     error.textContent = "";
     try {
-      stats = await benchmarkHmacVerification(messageInput.value, forgedInput.value, 8000);
+      const measured = await benchmarkHmacVerification(snapshot.message, snapshot.forged, 8000);
+      if (myGeneration !== generation) {
+        return; // inputs changed mid-run; invalidate() already said so
+      }
+      stats = measured;
       draw();
     } catch (caught) {
+      if (myGeneration !== generation) {
+        return;
+      }
       stats = null;
       error.textContent = caught instanceof Error ? caught.message : "HMAC benchmark failed.";
       summary.textContent = "HMAC timing run failed; adjust forged MAC hex and retry.";
@@ -511,6 +542,10 @@ function wireHmacPanel(): () => Promise<void> {
         label: "Run failed — nothing measured",
         detail: `${error.textContent} No timing was recorded this run; fix the input above and press the button again.`
       });
+    } finally {
+      // withRunning() blocks re-entry on this button, and the lazy auto-run goes
+      // through it too, so at most one HMAC run is ever in flight.
+      inFlight = false;
     }
   }
 
@@ -555,7 +590,7 @@ function wireRsaPanel(): () => Promise<void> {
       `${stats.keyDescription}. Flipped private exponent bit index ${stats.selectedBitIndex}. ` +
       `Naive gap=${naiveGap.toFixed(4)} ms, ladder gap=${ladderGap.toFixed(4)} ms over repeated measurements. ` +
       `WebCrypto RSA-PSS sign mean=${stats.webCryptoSignMeanMs.toFixed(4)} ms.`;
-    setVerdict("rsa-verdict", rsaVerdict(naiveGap, ladderGap, stats.naiveBit0Mean));
+    setVerdict("rsa-verdict", rsaVerdict(naiveGap, ladderGap, stats.naiveBit0Mean, stats.naiveBit0Samples.length));
     renderDataTable(
       table,
       "Mean exponentiation time by method and secret bit value",
@@ -621,7 +656,7 @@ function wireCachePanel(): () => Promise<void> {
     summary.textContent =
       `Measured cached mean=${stats.cachedMean.toFixed(4)} ms, uncached mean=${stats.uncachedMean.toFixed(4)} ms. ` +
       `Timing differs because cache-line residency changes memory latency. WebCrypto AES routes to hardened native implementations.`;
-    setVerdict("cache-verdict", cacheVerdict(stats.cachedMean, stats.uncachedMean));
+    setVerdict("cache-verdict", cacheVerdict(stats.cachedMean, stats.uncachedMean, stats.cachedSamples.length));
     renderDataTable(
       table,
       "Mean access time for cache-resident vs evicted working set",
