@@ -67,6 +67,32 @@ function runWhenVisible(target: Element, fn: () => void): void {
   observer.observe(target);
 }
 
+/**
+ * Page-wide benchmark queue: exactly one panel measures at a time.
+ *
+ * Every panel reports "Measured over N samples in this browser on this machine",
+ * so the condition it names has to actually hold. It did not. `withRunning()`
+ * guarded only its OWN button, while the lazy IntersectionObserver fires one
+ * scheduleIdle() per panel that scrolls into view — and the RSA panel awaits
+ * WebCrypto RSA-PSS keygen plus 24 awaited signs, each timed with
+ * performance.now() around the await, so another panel's synchronous benchmark
+ * can land inside a measured span. Driven headless with the whole page in view,
+ * three panels (strcmp, hmac, rsa) were observed in the Running state at the
+ * same instant.
+ *
+ * Concurrency on one main thread changes JIT state, GC pressure and event-loop
+ * scheduling — the very distributions being measured — so a lab about timing
+ * cannot let its own panels race each other.
+ */
+let benchmarkQueue: Promise<unknown> = Promise.resolve();
+
+function serializeBenchmark<T>(work: () => Promise<T>): Promise<T> {
+  // `then(work, work)` so one failed benchmark does not wedge the queue.
+  const result = benchmarkQueue.then(work, work);
+  benchmarkQueue = result.catch(() => undefined);
+  return result;
+}
+
 /** Disable the trigger, show a Running… state, paint it, then run the work. */
 async function withRunning(button: HTMLButtonElement, work: () => void | Promise<void>): Promise<void> {
   if (button.dataset.running === "true") {
@@ -76,11 +102,16 @@ async function withRunning(button: HTMLButtonElement, work: () => void | Promise
   button.dataset.label = label;
   button.dataset.running = "true";
   button.disabled = true;
-  button.setAttribute("aria-busy", "true");
-  button.textContent = "Running…";
-  await nextFrame(); // let the Running… state paint before the synchronous benchmark
+  // Queued is not measuring: aria-busy and the Running… label are claimed only
+  // on this panel's turn, so "busy" always means "this is the panel being timed".
+  button.textContent = "Queued…";
   try {
-    await work();
+    await serializeBenchmark(async () => {
+      button.setAttribute("aria-busy", "true");
+      button.textContent = "Running…";
+      await nextFrame(); // let the Running… state paint before the synchronous benchmark
+      await work();
+    });
   } finally {
     button.disabled = false;
     button.removeAttribute("aria-busy");

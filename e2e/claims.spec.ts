@@ -637,7 +637,22 @@ test('the modeled overlay is drawn, labelled as modeled, and changes no measurem
   page,
 }) => {
   await openPage(page);
-  await settle(page, '#strcmp-run', '#strcmp-verdict');
+  // Quiesce the WHOLE page before capturing baselines. Panels finish at
+  // staggered times now that benchmarks are serialized page-wide, and each one
+  // that lands changes the document height; a scrollbar appearing or vanishing
+  // fires the debounced resize redraw, which re-renders every canvas at a new
+  // width. That would move the histogram's pixels for reasons that have nothing
+  // to do with the overlay this test is about.
+  for (const [button, verdict] of [
+    ['#strcmp-run', '#strcmp-verdict'],
+    ['#hmac-run', '#hmac-verdict'],
+    ['#rsa-run', '#rsa-verdict'],
+    ['#cache-run', '#cache-verdict'],
+  ] as const) {
+    await settle(page, button, verdict);
+  }
+  await page.locator('#strcmp-run').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400); // outlast the 150ms resize-redraw debounce
 
   const toggle = page.locator('#strcmp-modeled');
   await expect(toggle).not.toBeChecked();
@@ -712,4 +727,58 @@ test('replaying a mechanism animation re-runs it without moving the counts it re
       .toBe(before);
     await expect(button).toBeEnabled({ timeout: 30_000 });
   }
+});
+
+test('only one panel is ever being timed at once', async ({ page }) => {
+  // Regression: withRunning() guarded only its own button, and the lazy
+  // IntersectionObserver schedules one run per panel that scrolls into view.
+  // With the whole page in view, three panels (strcmp, hmac, rsa) were observed
+  // in the Running state at the same instant — while each verdict said
+  // "Measured over N samples in this browser on this machine", a condition that
+  // did not hold. The RSA panel times WebCrypto signs around an await, so a
+  // neighbouring synchronous benchmark lands inside a measured span.
+  //
+  // A page-wide queue now serialises them. aria-busy marks only the panel whose
+  // turn it is, so the invariant is directly observable.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 4000 }); // every panel in view at once
+  await page.goto('.');
+  await expect(page.locator('#main-content')).toBeVisible();
+
+  const ids = ['strcmp-run', 'hmac-run', 'rsa-run', 'cache-run'];
+  let samples = 0;
+  let sawBusy = 0;
+  let maxConcurrent = 0;
+
+  // Poll for a fixed span with no early exit, so the sample count cannot
+  // collapse to a handful and make the concurrency assertion vacuous.
+  for (let i = 0; i < 120; i += 1) {
+    const busy = await page.evaluate(
+      (list) =>
+        list.filter((id) => document.getElementById(id)?.getAttribute('aria-busy') === 'true')
+          .length,
+      ids,
+    );
+    samples += 1;
+    if (busy > 0) sawBusy += 1;
+    maxConcurrent = Math.max(maxConcurrent, busy);
+    await page.waitForTimeout(10);
+  }
+
+  // Non-vacuous: the poll must actually have caught panels mid-measurement.
+  expect(samples, 'the poll must have run').toBe(120);
+  expect(sawBusy, 'at least one panel must have been caught measuring').toBeGreaterThan(0);
+  expect(
+    maxConcurrent,
+    `${maxConcurrent} panels were being timed at once — each one reports "measured on this machine"`,
+  ).toBe(1);
+
+  // And every panel still finished: serialising must not strand one.
+  for (const id of ids) {
+    await expect(page.locator(`#${id}`)).toBeEnabled({ timeout: 90_000 });
+  }
+  const verdicts = await page.locator('.verdict').evaluateAll(
+    (nodes) => nodes.filter((n) => (n.textContent ?? '').trim().length > 0).length,
+  );
+  expect(verdicts, 'all four panels must reach a verdict').toBe(ids.length);
 });
