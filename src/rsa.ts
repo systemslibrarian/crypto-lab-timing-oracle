@@ -145,6 +145,14 @@ function randomPrime(min = 200n, max = 500n): bigint {
   throw new Error("Unable to generate prime for toy RSA");
 }
 
+/**
+ * Width of the private-exponent window the mechanism animation renders. The
+ * animation pads to exactly this many bits, leading zeros included, so the
+ * ladder's operation count is constant across runs — which is the property the
+ * panel's caption claims for it.
+ */
+export const EXPONENT_WINDOW_BITS = 10;
+
 function generateToyRsaKeypair(): ToyRsaKeypair {
   // Regenerate primes until a valid public exponent exists. Each attempt tries a
   // range of standard exponents constrained to e < phi (textbook RSA), so the
@@ -255,7 +263,7 @@ export async function benchmarkRsaTiming(samples = 140): Promise<RsaTimingStats>
   // Low 10 bits of the real private exponent, so the animation shows the actual
   // generated secret's schedule (not a canned pattern). Kept small so the row of
   // squares fits and steps at a watchable pace.
-  const exponentLowBits = Number(key.d & 0x3ffn);
+  const exponentLowBits = Number(key.d & ((1n << BigInt(EXPONENT_WINDOW_BITS)) - 1n));
 
   return {
     keyDescription,

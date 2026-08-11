@@ -2,7 +2,7 @@ import { createCompareAnimator, createExponentAnimator } from "./animate";
 import { benchmarkCacheTiming, type CacheTimingStats } from "./cache";
 import { benchmarkHmacVerification, type HmacTimingStats } from "./hmac";
 import { modeledPrefixCost } from "./mechanism";
-import { benchmarkRsaTiming, type RsaTimingStats } from "./rsa";
+import { benchmarkRsaTiming, EXPONENT_WINDOW_BITS, type RsaTimingStats } from "./rsa";
 import { renderDataTable, renderHistogram, renderLineChart, type LineSeries } from "./stats";
 import { benchmarkStringComparisons, type ComparisonStats } from "./strcmp";
 import { cacheVerdict, hmacVerdict, rsaVerdict, stringComparisonVerdict, type Verdict } from "./verdict";
@@ -143,7 +143,7 @@ function renderAppShell(): void {
             <span class="status good">Constant-Time: REQUIRED</span>
           </div>
         </div>
-        <p class="panel-text">Naive string comparison exits on the first mismatch. Timing rises with longer correct prefixes and leaks secret bytes.</p>
+        <p class="panel-text">Naive string comparison exits on the first mismatch. Timing rises with longer correct prefixes and leaks the secret one character at a time.</p>
         <div class="controls two-col">
           <label for="strcmp-target">Target secret string</label>
           <input id="strcmp-target" aria-label="Target secret string input" value="timing-oracle-demo-secret" />
@@ -157,22 +157,22 @@ function renderAppShell(): void {
             <h3 id="strcmp-mech-title" class="mechanism-title">The mechanism, step by step</h3>
             <button id="strcmp-mech-play" class="mech-play" type="button" aria-label="Replay the compare-loop animation">▶ Replay</button>
           </div>
-          <p class="mechanism-lead">This runs the compare loop for real on your current guess and counts byte checks — no timer, so it is exact every run. Watch the vulnerable loop stop at the first mismatch.</p>
-          <div class="mech-grid" tabindex="0" role="region" aria-label="Byte-by-byte comparison of secret and guess">
+          <p class="mechanism-lead">This runs the compare loop for real on your current guess and counts character checks — no timer, so it is exact every run. The comparator walks UTF-16 code units, which is what &ldquo;character&rdquo; counts here; for accented letters or emoji that is not the same as UTF-8 bytes. Watch the vulnerable loop stop at the first mismatch — and try a guess of the wrong length.</p>
+          <div class="mech-grid" tabindex="0" role="region" aria-label="Character-by-character comparison of secret and guess">
             <div class="mech-row" data-role="target-row"></div>
             <div class="mech-row" data-role="guess-row"></div>
           </div>
           <div class="mech-counters" aria-live="polite">
-            <span class="mech-counter mech-counter--vuln">Vulnerable byte checks: <strong data-role="vuln-count">0</strong></span>
-            <span class="mech-counter mech-counter--ct">Constant-time byte checks: <strong data-role="ct-count">0</strong></span>
+            <span class="mech-counter mech-counter--vuln">Vulnerable character checks: <strong data-role="vuln-count">0</strong></span>
+            <span class="mech-counter mech-counter--ct">Constant-time character checks: <strong data-role="ct-count">0</strong></span>
           </div>
           <p class="mech-status" data-role="mech-status" aria-live="polite"></p>
           <p class="mech-legend"><span class="mech-key mech-key--match">✓ matched</span> <span class="mech-key mech-key--mismatch">✗ first mismatch (loop exits)</span> <span class="mech-key mech-key--skipped">– never inspected</span></p>
         </div>
 
         <figure class="chart-figure">
-          <figcaption id="strcmp-cap" class="chart-caption">What you are looking at: time vs. how many leading bytes the guess got right. A line that <strong>rises to the right</strong> = each correct byte costs more = leak. A <strong>flat line</strong> = constant-time = safe.</figcaption>
-          <canvas id="strcmp-sweep" aria-label="Line chart of vulnerable and constant-time comparison time versus number of correct leading bytes" role="img" aria-describedby="strcmp-cap"></canvas>
+          <figcaption id="strcmp-cap" class="chart-caption">What you are looking at: time vs. how many leading characters the guess got right. A line that <strong>rises to the right</strong> = each correct character costs more = leak. A <strong>flat line</strong> = constant-time = safe.</figcaption>
+          <canvas id="strcmp-sweep" aria-label="Line chart of vulnerable and constant-time comparison time versus number of correct leading characters" role="img" aria-describedby="strcmp-cap"></canvas>
         </figure>
         <div class="mode-toggle">
           <label class="mode-check"><input type="checkbox" id="strcmp-modeled" /> <span>Show modeled ideal signal (not measured)</span></label>
@@ -228,7 +228,7 @@ function renderAppShell(): void {
             <h3 id="rsa-mech-title" class="mechanism-title">Why the ladder is uniform — bit by bit</h3>
             <button id="rsa-mech-play" class="mech-play" type="button" aria-label="Replay the square-and-multiply animation">▶ Replay</button>
           </div>
-          <p class="mechanism-lead">These are the low bits of the generated private exponent. Naive square-and-multiply does an extra multiply (<code>×</code>) only on a <strong>1</strong>-bit, so its multiply count equals the secret's Hamming weight. The ladder does one square and one multiply on <em>every</em> bit.</p>
+          <p class="mechanism-lead">These are the low ${EXPONENT_WINDOW_BITS} bits of the generated private exponent, leading zeros included so the width never changes between runs. Naive square-and-multiply does an extra multiply (<code>×</code>) only on a <strong>1</strong>-bit, so its multiply count equals the secret's Hamming weight. The ladder does one square and one multiply on <em>every</em> bit.</p>
           <div class="mech-bitrow" data-role="bit-row" role="img" aria-label="Exponent bits; ones trigger an extra multiply"></div>
           <div class="mech-counters" aria-live="polite">
             <span class="mech-counter mech-counter--vuln">Naive (leaks): <strong data-role="naive-tally">—</strong></span>
@@ -280,7 +280,7 @@ function renderAppShell(): void {
           <li>No secret-dependent branches.</li>
           <li>No secret-dependent memory accesses.</li>
           <li>No secret-dependent loop counts.</li>
-          <li>Always use constant-time comparison for MACs and passwords.</li>
+          <li>Use a password-hashing KDF (argon2id, scrypt, bcrypt) for passwords &mdash; never compare a plaintext password at all. Use a vetted fixed-time comparison for the fixed-length things: MACs, hashes, verifiers and secret tokens.</li>
           <li>Use hardware crypto (AES-NI, WebCrypto) over software table implementations.</li>
         </ol>
         <p class="panel-note panel-caveat"><strong>Caveat for this demo:</strong> the constant-time code here fixes the instruction schedule (no secret-dependent branch, loop, or memory access), which is the property being taught — but a managed runtime like JavaScript is not guaranteed constant-time end-to-end. Real deployments rely on audited native primitives (libsodium, BoringSSL) and, where possible, hardware instructions.</p>
@@ -389,7 +389,7 @@ function wireStringPanel(): () => Promise<void> {
         color: "#8a5cff"
       });
     }
-    renderLineChart(sweepCanvas, series, "Comparison time by correct leading bytes");
+    renderLineChart(sweepCanvas, series, "Comparison time by correct leading characters");
 
     renderHistogram(
       histCanvas,
@@ -411,9 +411,9 @@ function wireStringPanel(): () => Promise<void> {
     const usPerByteSingle = (msPerByteBatch / stats.loopsPerTimedBatch) * 1000;
     summary.textContent =
       `Prefix match length: ${stats.prefixMatchLength} chars. ` +
-      `Going from ${stats.shortPrefixChars} to ${stats.longPrefixChars} correct leading bytes changed the vulnerable batch time by ` +
+      `Going from ${stats.shortPrefixChars} to ${stats.longPrefixChars} correct leading characters changed the vulnerable batch time by ` +
       `${sweepGain.toFixed(4)} ms over ${stats.loopsPerTimedBatch.toLocaleString()} comparisons — ` +
-      `~${usPerByteSingle.toFixed(5)} microseconds per extra correct byte per comparison. ` +
+      `~${usPerByteSingle.toFixed(5)} microseconds per extra correct character per comparison. ` +
       `That is the size of the per-guess signal such an attack would have to average over; this panel measures the signal, it does not attempt the recovery. ` +
       `Constant-time mean ${stats.constantMean.toFixed(4)} ms (sigma ${stats.constantStdDev.toFixed(4)}). ` +
       `${stats.iterationsPerMode.toLocaleString()} real comparisons per mode via performance.now().`;
@@ -564,7 +564,7 @@ function wireRsaPanel(): () => Promise<void> {
   const mechPlay = byId<HTMLButtonElement>("rsa-mech-play");
   const exponentAnimator = createExponentAnimator(mechRoot, mechPlay);
   // Seed with a representative pattern until a real key is generated on run.
-  exponentAnimator.render(0b1011010011);
+  exponentAnimator.render(0b1011010011, EXPONENT_WINDOW_BITS);
 
   let stats: RsaTimingStats | null = null;
 
@@ -572,7 +572,7 @@ function wireRsaPanel(): () => Promise<void> {
     if (!stats) {
       return;
     }
-    exponentAnimator.render(stats.exponentLowBits);
+    exponentAnimator.render(stats.exponentLowBits, EXPONENT_WINDOW_BITS);
     renderHistogram(
       canvas,
       [

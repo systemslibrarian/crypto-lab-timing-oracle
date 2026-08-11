@@ -128,17 +128,26 @@ export function createCompareAnimator(root: HTMLElement, playButton: HTMLButtonE
       els.vulnCount.textContent = String(vulnTrace.operations);
       els.ctCount.textContent = String(constTrace.operations);
       const stoppedAt = vulnTrace.firstMismatch;
-      if (stoppedAt === -1) {
-        els.status.textContent = `Full match: the vulnerable loop ran all ${vulnTrace.operations} byte checks — the slowest possible case.`;
+      if (vulnTrace.lengthGate) {
+        // The vulnerable comparator opens with a length check and returns
+        // before the loop. Narrating a bail-out "at byte N" here described a
+        // walk that never happened.
+        els.status.textContent =
+          `Lengths differ (${target.length} vs ${guess.length}): the vulnerable compare returns on its length check and never enters the loop — ${vulnTrace.operations} character checks ran. ` +
+          `That is faster than any wrong guess of the right length, so the response time itself tells an attacker the secret's LENGTH before a single character is probed. ` +
+          `The constant-time compare folds the length difference into the same mask and still runs all ${constTrace.operations}.`;
+      } else if (stoppedAt === -1) {
+        els.status.textContent = `Full match: the vulnerable loop ran all ${vulnTrace.operations} character checks — the slowest possible case.`;
       } else {
         els.status.textContent =
-          `Vulnerable loop bailed out at byte ${stoppedAt + 1} of ${maxLen}: only ${vulnTrace.operations} byte checks ran. ` +
+          `Vulnerable loop bailed out at character ${stoppedAt + 1} of ${maxLen}: only ${vulnTrace.operations} character checks ran. ` +
           `A closer guess runs MORE checks and takes longer — that difference is the leak. ` +
           `The constant-time compare always runs ${constTrace.operations}.`;
       }
     };
 
-    if (prefersReducedMotion()) {
+    // Nothing to step through when the loop never ran.
+    if (prefersReducedMotion() || vulnTrace.lengthGate) {
       finish();
       return;
     }
@@ -146,11 +155,11 @@ export function createCompareAnimator(root: HTMLElement, playButton: HTMLButtonE
     let cursor = 0;
     els.vulnCount.textContent = "0";
     els.ctCount.textContent = String(constTrace.operations);
-    els.status.textContent = "Stepping the vulnerable compare byte by byte…";
+    els.status.textContent = "Stepping the vulnerable compare character by character…";
 
     const tick = (): void => {
       paintCompareCells(els.guessRow, vulnTrace, cursor);
-      // Running vulnerable op count = inspected bytes so far (match/mismatch, not skipped).
+      // Running vulnerable op count = inspected positions so far (match/mismatch, not skipped).
       const inspected = vulnTrace.steps.slice(0, cursor + 1).filter((s) => s.status !== "skipped").length;
       els.vulnCount.textContent = String(inspected);
       cursor += 1;
@@ -188,7 +197,7 @@ export function createCompareAnimator(root: HTMLElement, playButton: HTMLButtonE
  * ------------------------------------------------------------------ */
 
 export type ExponentAnimator = {
-  render(value: number): void;
+  render(value: number, width?: number): void;
   destroy(): void;
 };
 
@@ -219,6 +228,7 @@ export function createExponentAnimator(root: HTMLElement, playButton: HTMLButton
 
   let timer = 0;
   let currentValue = 0;
+  let currentWidth: number | undefined;
 
   function clearTimer(): void {
     if (timer) {
@@ -245,10 +255,11 @@ export function createExponentAnimator(root: HTMLElement, playButton: HTMLButton
     });
   }
 
-  function render(value: number): void {
+  function render(value: number, width?: number): void {
     clearTimer();
     currentValue = value;
-    const trace = traceExponent(value);
+    currentWidth = width;
+    const trace = traceExponent(value, width);
     buildBitRow(bitRow, trace);
 
     const finish = (): void => {
@@ -281,7 +292,7 @@ export function createExponentAnimator(root: HTMLElement, playButton: HTMLButton
 
   playButton.addEventListener("click", () => {
     respectMotion = true;
-    render(currentValue);
+    render(currentValue, currentWidth);
     respectMotion = false;
   });
 

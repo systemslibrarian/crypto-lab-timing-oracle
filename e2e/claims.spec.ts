@@ -59,6 +59,12 @@ async function openPage(page: Page): Promise<void> {
 }
 
 /** Read a rendered data table as numbers keyed by first column. */
+/**
+ * Width of the private-exponent window the RSA mechanism panel renders. Kept in
+ * step with EXPONENT_WINDOW_BITS in src/rsa.ts.
+ */
+const RSA_WINDOW_BITS = 10;
+
 async function tableRows(page: Page, sel: string): Promise<string[][]> {
   return page.locator(`${sel} tbody tr`).evaluateAll((rows) =>
     rows.map((row) => Array.from((row as HTMLTableRowElement).cells).map((cell) => cell.textContent ?? ''))
@@ -104,12 +110,12 @@ function halfUlp(rendered: string): number {
   return dot < 0 ? 0.5 : 0.5 * 10 ** -(rendered.length - dot - 1);
 }
 
-test('panel 1 mechanism counts the exact bytes the compare loop inspects', async ({ page }) => {
+test('panel 1 mechanism counts the exact characters the compare loop inspects', async ({ page }) => {
   await openPage(page);
   await settle(page, '#strcmp-run', '#strcmp-verdict');
 
-  // 8-char secret, first 4 bytes guessed right: the vulnerable loop must inspect
-  // exactly 5 bytes (4 matches + the byte that fails) and skip the other 3.
+  // 8-char secret, first 4 characters guessed right: the vulnerable loop must
+  // inspect exactly 5 (4 matches + the one that fails) and skip the other 3.
   await page.fill('#strcmp-target', 'abcdefgh');
   await page.fill('#strcmp-guess', 'abcdWXYZ');
 
@@ -121,23 +127,23 @@ test('panel 1 mechanism counts the exact bytes the compare loop inspects', async
   const mismatched = cells.filter((m) => m === '✗').length;
   const skipped = cells.filter((m) => m === '–').length;
 
-  expect(cells.length, 'one cell per secret byte').toBe(8);
+  expect(cells.length, 'one cell per secret character').toBe(8);
   expect(matched).toBe(4);
   expect(mismatched).toBe(1);
-  // Parts sum to the whole: every byte is accounted for exactly once.
+  // Parts sum to the whole: every position is accounted for exactly once.
   expect(matched + mismatched + skipped, 'cells accounted for').toBe(cells.length);
   expect(skipped).toBe(3);
 
   const vuln = await page.locator('#strcmp-mech [data-role=vuln-count]').textContent();
   const constant = await page.locator('#strcmp-mech [data-role=ct-count]').textContent();
   // The counter must equal the cells actually inspected, not a separate tally.
-  expect(Number(vuln), 'vulnerable byte checks = inspected cells').toBe(matched + mismatched);
+  expect(Number(vuln), 'vulnerable character checks = inspected cells').toBe(matched + mismatched);
   // The defense: the constant-time count is the full length regardless of input.
-  expect(Number(constant), 'constant-time byte checks = full length').toBe(cells.length);
+  expect(Number(constant), 'constant-time character checks = full length').toBe(cells.length);
 
   const status = await page.locator('#strcmp-mech [data-role=mech-status]').textContent();
-  expect(status).toContain(`bailed out at byte ${matched + mismatched} of ${cells.length}`);
-  expect(status).toContain(`only ${matched + mismatched} byte checks ran`);
+  expect(status).toContain(`bailed out at character ${matched + mismatched} of ${cells.length}`);
+  expect(status).toContain(`only ${matched + mismatched} character checks ran`);
   expect(status).toContain(`always runs ${cells.length}`);
 
   // Second surface, same run: the benchmark's own shared-prefix length must
@@ -151,6 +157,55 @@ test('panel 1 mechanism counts the exact bytes the compare loop inspects', async
   const fullStatus = await page.locator('#strcmp-mech [data-role=mech-status]').textContent();
   expect(fullStatus).toContain('Full match');
   expect(await page.locator('#strcmp-mech [data-role=vuln-count]').textContent()).toBe('8');
+});
+
+test('panel 1 mechanism reports zero checks when the length gate fires', async ({ page }) => {
+  // Regression: the real comparator opens with
+  //   if (a.length !== b.length) return false;
+  // so a wrong-length guess runs ZERO character comparisons. The model walked
+  // the string anyway and reported the count it WOULD have run — across a
+  // 124-guess corpus reachable by editing the shipped defaults, 98 differed in
+  // length and every one was overstated. The worst case is the interesting one:
+  // guessing the secret minus its final character showed 25 checks for a
+  // comparator that ran none, under a panel captioned "exact every run".
+  //
+  // The older test for this panel used 'abcdefgh' / 'abcdWXYZ' — equal length,
+  // the one case the count was right for.
+  await openPage(page);
+  await settle(page, '#strcmp-run', '#strcmp-verdict');
+
+  await page.fill('#strcmp-target', 'abcdefgh');
+  await page.fill('#strcmp-guess', 'abcdefg'); // a proper prefix: one shorter
+
+  const cells = await page
+    .locator('#strcmp-mech [data-role=guess-row] .mech-cell')
+    .evaluateAll((nodes) => nodes.map((n) => (n as HTMLElement).dataset.mark ?? ''));
+  expect(cells.length, 'the row still shows every position').toBeGreaterThan(0);
+  expect(
+    cells.filter((m) => m === '–').length,
+    'no position may be marked inspected when the loop never ran',
+  ).toBe(cells.length);
+
+  const vuln = await page.locator('#strcmp-mech [data-role=vuln-count]').textContent();
+  expect(Number(vuln), 'the vulnerable loop was never entered').toBe(0);
+
+  // The defense still scans everything — the count that does NOT move.
+  const constant = await page.locator('#strcmp-mech [data-role=ct-count]').textContent();
+  expect(Number(constant), 'constant-time still walks the full width').toBe(cells.length);
+
+  const status = await page.locator('#strcmp-mech [data-role=mech-status]').textContent();
+  expect(status, 'the narration must name the length check').toContain('Lengths differ');
+  expect(status).toContain('never enters the loop');
+  expect(status, 'and must not narrate a bail-out that did not happen').not.toContain('bailed out');
+  // What the gate actually leaks is the length, and the panel must say so.
+  expect(status).toContain("secret's LENGTH");
+
+  // Same-length guess, same panel: the counter must come back to a real count.
+  await page.fill('#strcmp-guess', 'abcdefgX');
+  expect(
+    Number(await page.locator('#strcmp-mech [data-role=vuln-count]').textContent()),
+    'an equal-length guess re-enters the loop',
+  ).toBe(8);
 });
 
 test('panel 1 verdict follows the timing gap the same panel reported', async ({ page }) => {
@@ -282,6 +337,9 @@ test('panel 3 multiply counts equal the exponent Hamming weight the page rendere
   // ladder multiplies == bit length (secret-independent).
   expect(naive).toBe(`${bits.length} squares · ${ones} multiplies`);
   expect(ladder).toBe(`${bits.length} squares · ${bits.length} multiplies`);
+  // Both assertions above are true of ANY bit row, so on their own they cannot
+  // tell whether the row is the fixed window the caption promises. Pin the width.
+  expect(bits.length, 'the panel renders a fixed-width window').toBe(RSA_WINDOW_BITS);
 
   const status = await page.locator('#rsa-mech [data-role=exp-status]').textContent();
   expect(status).toContain(`Naive did ${ones} multiplies for ${ones} one-bits`);
@@ -320,6 +378,50 @@ test('panel 3 multiply counts equal the exponent Hamming weight the page rendere
       `inconclusive verdict but naiveRel=${naiveRel} naiveGap=${naiveGap} ladderGap=${ladderGap}`
     ).toBe(true);
   }
+});
+
+test('panel 3 ladder tally does not move across freshly generated keys', async ({ page }) => {
+  // Regression: the panel says the ladder does one square and one multiply per
+  // bit "no matter the bit values", but it rendered bitsOf(d & 0x3ff), which
+  // strips leading zeros — so the rendered width, and with it the ladder tally,
+  // was a function of the top bit's VALUE. Sampling the window uniformly, 1027
+  // of 2000 draws rendered fewer than 10 positions and the on-screen ladder
+  // tally ranged over all ten values from 1 to 10, directly contradicting the
+  // sentence beneath it.
+  //
+  // The unit test that covered this picked 0b10000000 and 0b11111111 — both
+  // with the top bit set, the only case where the width survives.
+  await openPage(page);
+  await settle(page, '#rsa-run', '#rsa-verdict');
+
+  const ladderTallies = new Set<string>();
+  const naiveTallies = new Set<string>();
+  const widths = new Set<number>();
+  const RUNS = 4;
+
+  for (let i = 0; i < RUNS; i += 1) {
+    if (i > 0) {
+      await rerun(page, '#rsa-run'); // generates a brand new toy key
+    }
+    const bits = await page
+      .locator('#rsa-mech [data-role=bit-row] .mech-bit')
+      .evaluateAll((nodes) => nodes.map((n) => (n as HTMLElement).textContent ?? ''));
+    expect(bits.length, 'a bit row must be rendered').toBeGreaterThan(0);
+    widths.add(bits.length);
+    ladderTallies.add((await page.locator('#rsa-mech [data-role=ladder-tally]').textContent()) ?? '');
+    naiveTallies.add((await page.locator('#rsa-mech [data-role=naive-tally]').textContent()) ?? '');
+  }
+
+  expect(widths.size, `every run must render the same width, saw ${[...widths]}`).toBe(1);
+  expect([...widths][0]).toBe(RSA_WINDOW_BITS);
+  expect(
+    ladderTallies.size,
+    `the ladder tally must be identical across ${RUNS} keys, saw ${[...ladderTallies]}`,
+  ).toBe(1);
+  expect([...ladderTallies][0]).toBe(`${RSA_WINDOW_BITS} squares · ${RSA_WINDOW_BITS} multiplies`);
+  // And it must not be constant merely because nothing changed between runs:
+  // the naive tally tracks the secret, so a fresh key should move it.
+  expect(naiveTallies.size, 'the naive tally must respond to the secret').toBeGreaterThan(1);
 });
 
 test('panel 4 cache verdict is recomputed from the cached/uncached means it published', async ({ page }) => {
