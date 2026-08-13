@@ -243,6 +243,14 @@ a:focus-visible {
 
 main {
   display: grid;
+  /* WCAG 1.4.10. A `display: grid` with no `grid-template-columns` is an
+     implicit AUTO track, and an auto track is floored at its widest item's
+     min-content. One panel's 837px comparison grid therefore sized the column
+     for the whole page: measured at a 380px viewport, the track resolved to
+     897px and the document scrolled to 910px. `minmax(0, 1fr)` lets the track
+     be narrower than its content, which is what allows the panel's own
+     `overflow-x: auto` scroller to actually scroll. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.9rem;
   margin-top: 0.9rem;
 }
@@ -444,6 +452,13 @@ button[aria-busy="true"] {
   display: grid;
   gap: 0.35rem;
   overflow-x: auto;
+  /* WCAG 1.4.10. `overflow-x: auto` alone does not make this scroll: a grid or
+     flex item's automatic minimum size is its MIN-CONTENT, so the box grew to
+     fit `.mech-row` (837px of nowrap character cells) instead of scrolling, and
+     the document measured 910px at a 380px viewport. `min-width: 0` lets the
+     item shrink below its content, which is what turns the declared scroller
+     into an actual one. */
+  min-width: 0;
 }
 
 .mech-row {
