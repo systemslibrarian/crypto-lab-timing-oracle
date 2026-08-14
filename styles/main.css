@@ -114,6 +114,15 @@ a {
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--accent);}
 .cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;color:var(--text);}
+/* Light-theme hero inks, measured against the hero's gradient backdrop rather
+   than the flat page colours the variables were chosen on. --accent (#007a6b)
+   was 2.81:1 for the bold WHY IT MATTERS label and --muted (#495063) 4.38:1
+   for the description — both under 4.5:1. Darker inks for light only; dark's
+   #31d7bb and #d0d7e3 already clear the bar there. */
+.cl-hero-why-label{color:#06413c;}
+:root[data-theme="dark"] .cl-hero-why-label{color:var(--accent);}
+.cl-hero-desc{color:#3f455a;}
+:root[data-theme="dark"] .cl-hero-desc{color:var(--muted);}
 @media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}.cl-hero-main{flex-basis:auto;min-width:0;}}
 
 .category-chip,
@@ -523,7 +532,11 @@ button[aria-busy="true"] {
 }
 
 .mech-cell--skipped {
-  opacity: 0.4;
+  /* Dimmed, but still WCAG 1.4.3 text: at the previous 0.4 the cell's character
+     blended to 3.26:1 (dark) and 2.45:1 (light) against its backdrop. 0.68
+     measures ~5:1 in both themes; the dashed border and the "–" mark carry the
+     never-inspected state, so the dimming is redundant emphasis, not the cue. */
+  opacity: 0.68;
   border-style: dashed;
 }
 

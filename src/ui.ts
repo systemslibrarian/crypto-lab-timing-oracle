@@ -183,7 +183,10 @@ function renderAppShell(): void {
           <button id="strcmp-run" type="button">Run 10,000 iterations per mode</button>
         </div>
 
-        <div class="mechanism" id="strcmp-mech" aria-labelledby="strcmp-mech-title">
+        <!-- role="group": aria-labelledby is prohibited on a role-less div
+             (axe: aria-prohibited-attr) — a generic element cannot take an
+             accessible name. -->
+        <div class="mechanism" id="strcmp-mech" role="group" aria-labelledby="strcmp-mech-title">
           <div class="mechanism-head">
             <h3 id="strcmp-mech-title" class="mechanism-title">The mechanism, step by step</h3>
             <button id="strcmp-mech-play" class="mech-play" type="button" aria-label="Replay the compare-loop animation">▶ Replay</button>
@@ -254,7 +257,7 @@ function renderAppShell(): void {
         <p class="panel-text">Square-and-multiply uses a secret-dependent branch on each exponent bit. Montgomery ladder keeps operation count uniform.</p>
         <button id="rsa-run" type="button">Generate toy RSA key and measure bit leakage</button>
 
-        <div class="mechanism" id="rsa-mech" aria-labelledby="rsa-mech-title">
+        <div class="mechanism" id="rsa-mech" role="group" aria-labelledby="rsa-mech-title">
           <div class="mechanism-head">
             <h3 id="rsa-mech-title" class="mechanism-title">Why the ladder is uniform — bit by bit</h3>
             <button id="rsa-mech-play" class="mech-play" type="button" aria-label="Replay the square-and-multiply animation">▶ Replay</button>
@@ -393,6 +396,41 @@ function wireStringPanel(): () => Promise<void> {
   guessInput.addEventListener("input", onInput);
   refreshMechanism();
 
+  /**
+   * The histogram lives inside a closed-by-default <details>. Rendering into it
+   * while the disclosure is shut is nondeterministic: Chromium lays the hidden
+   * content out lazily, so getBoundingClientRect() reports 0 (falling back to a
+   * 280px bitmap) or the real ~1070px depending on when layout happened — and
+   * `canvas { width: 100% }` then stretches a 280px bitmap into a blurry
+   * upscale the first time the reader opens "Show measured data". Render it
+   * only while the disclosure is open, and on open when a run finished shut.
+   */
+  const histDetails = histCanvas.closest("details");
+  let histDirty = false;
+  function drawHist(): void {
+    if (!stats) {
+      return;
+    }
+    if (histDetails && !histDetails.open) {
+      histDirty = true;
+      return;
+    }
+    histDirty = false;
+    renderHistogram(
+      histCanvas,
+      [
+        { label: "Vulnerable", values: stats.vulnerableSamples, color: VULN },
+        { label: "Constant-Time", values: stats.constantSamples, color: SAFE }
+      ],
+      "String comparison timing distribution"
+    );
+  }
+  histDetails?.addEventListener("toggle", () => {
+    if (histDetails.open && histDirty) {
+      drawHist();
+    }
+  });
+
   function draw(): void {
     if (!stats) {
       return;
@@ -422,14 +460,7 @@ function wireStringPanel(): () => Promise<void> {
     }
     renderLineChart(sweepCanvas, series, "Comparison time by correct leading characters");
 
-    renderHistogram(
-      histCanvas,
-      [
-        { label: "Vulnerable", values: stats.vulnerableSamples, color: VULN },
-        { label: "Constant-Time", values: stats.constantSamples, color: SAFE }
-      ],
-      "String comparison timing distribution"
-    );
+    drawHist();
 
     // Per-byte cost of one comparison. The measured endpoints are batch totals
     // over `loopsPerTimedBatch` comparisons and span `bytesSpanned` characters,
