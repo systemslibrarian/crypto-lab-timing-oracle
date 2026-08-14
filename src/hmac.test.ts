@@ -24,6 +24,15 @@ describe("benchmarkHmacVerification", () => {
     await expect(benchmarkHmacVerification("hello", "nothex!!", 20)).rejects.toThrow(/hex/u);
   });
 
+  it("rejects a well-formed forged MAC of the wrong length before benchmarking", async () => {
+    // Any length other than the 32-byte tag turns the run into a length-oracle
+    // measurement — the vulnerable verifier rejects at its length gate without
+    // inspecting a byte — while the chart still claims to plot prefix bytes.
+    await expect(benchmarkHmacVerification("hello", "00".repeat(31), 20)).rejects.toThrow(/exactly 64 hex/u);
+    await expect(benchmarkHmacVerification("hello", "00".repeat(33), 20)).rejects.toThrow(/exactly 64 hex/u);
+    await expect(benchmarkHmacVerification("hello", "ab", 20)).rejects.toThrow(/got 1 byte\./u);
+  });
+
   it("reports the MAC it actually verified for well-formed input", async () => {
     const stats = await benchmarkHmacVerification("hello", "00".repeat(32), 20);
     expect(stats.providedMacHex).toBe("00".repeat(32));

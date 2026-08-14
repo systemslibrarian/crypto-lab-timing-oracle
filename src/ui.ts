@@ -236,7 +236,7 @@ function renderAppShell(): void {
         </div>
         <div id="hmac-error" class="error" role="status" aria-live="assertive"></div>
         <figure class="chart-figure">
-          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each extra correct byte makes the early-exit compare run one step further before rejecting, so a <em>slower</em> response marks a correct byte — leak the MAC one byte at a time. A <strong>flat line</strong> is the constant-time compare.</figcaption>
+          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each extra correct byte makes the early-exit compare run one step further before rejecting, so a <em>slower</em> response marks a correct byte — leak the MAC one byte at a time. A <strong>flat line</strong> is the constant-time compare. The chart samples five prefix lengths (0&ndash;16 of the tag's 32 bytes) as sparse points on that curve, and each candidate is built from the known expected MAC — this calibrates the oracle's timing; it does not recover an unknown MAC.</figcaption>
           <canvas id="hmac-line" aria-label="Line chart of HMAC timing by correct prefix length" role="img" aria-describedby="hmac-cap"></canvas>
         </figure>
         <p id="hmac-summary" class="chart-summary" aria-live="polite"></p>
@@ -448,7 +448,18 @@ function wireStringPanel(): () => Promise<void> {
       `That is the size of the per-guess signal such an attack would have to average over; this panel measures the signal, it does not attempt the recovery. ` +
       `Constant-time mean ${stats.constantMean.toFixed(4)} ms (sigma ${stats.constantStdDev.toFixed(4)}). ` +
       `${stats.iterationsPerMode.toLocaleString()} real comparisons per mode via performance.now().`;
-    setVerdict("strcmp-verdict", stringComparisonVerdict(stats.vulnerableShortPrefixMs, stats.vulnerableLongPrefixMs, stats.vulnerableSamples.length));
+    setVerdict(
+      "strcmp-verdict",
+      stringComparisonVerdict(
+        stats.vulnerableShortPrefixMs,
+        stats.vulnerableLongPrefixMs,
+        // Constant-time sweep endpoints (0 -> full prefix), so the verdict can
+        // report what that path measurably did instead of asserting it was flat.
+        stats.sweep[0].constantMean,
+        stats.sweep[stats.sweep.length - 1].constantMean,
+        stats.vulnerableSamples.length
+      )
+    );
     renderDataTable(
       table,
       "Vulnerable vs constant-time batch time by number of correct leading characters",
@@ -620,7 +631,10 @@ function wireRsaPanel(): () => Promise<void> {
     summary.textContent =
       `${stats.keyDescription}. Flipped private exponent bit index ${stats.selectedBitIndex}. ` +
       `Naive gap=${naiveGap.toFixed(4)} ms, ladder gap=${ladderGap.toFixed(4)} ms over repeated measurements. ` +
-      `WebCrypto RSA-PSS sign mean=${stats.webCryptoSignMeanMs.toFixed(4)} ms.`;
+      `WebCrypto RSA-PSS sign mean=${stats.webCryptoSignMeanMs.toFixed(4)} ms ` +
+      // Different key size, algorithm and runtime: a reference point, not a
+      // comparison — and a stable mean is not evidence it is constant-time.
+      `(native 1024-bit API, listed as a performance reference only — not part of the leak comparison above).`;
     setVerdict("rsa-verdict", rsaVerdict(naiveGap, ladderGap, stats.naiveBit0Mean, stats.naiveBit0Samples.length));
     renderDataTable(
       table,
@@ -686,7 +700,11 @@ function wireCachePanel(): () => Promise<void> {
     // every run made canned constants look like this machine's measurements.
     summary.textContent =
       `Measured cached mean=${stats.cachedMean.toFixed(4)} ms, uncached mean=${stats.uncachedMean.toFixed(4)} ms. ` +
-      `Timing differs because cache-line residency changes memory latency. WebCrypto AES routes to hardened native implementations.`;
+      // Name the mechanism as the likely driver, not the proven cause: this
+      // page cannot rule out prefetching, frequency scaling, GC or the
+      // scheduler, and it cannot see which cache level anything landed in.
+      `Cache-line residency is the mechanism this experiment is built around and the likely driver of that gap, but JavaScript cannot isolate it — prefetching, frequency scaling, GC and scheduler noise can all contribute. ` +
+      `WebCrypto delegates AES to the browser's native crypto backend instead of running key-dependent table lookups in page JavaScript, which removes this channel's classic entry point.`;
     setVerdict("cache-verdict", cacheVerdict(stats.cachedMean, stats.uncachedMean, stats.cachedSamples.length));
     renderDataTable(
       table,

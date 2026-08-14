@@ -103,6 +103,19 @@ export async function benchmarkHmacVerification(
   // be reached by any input.
   const provided = hexToBytes(providedMacHex);
 
+  // A forged MAC of any other length is a different experiment. The vulnerable
+  // verifier rejects a wrong-length candidate at its length gate without
+  // inspecting a single byte, and the fixed-work verifier loops to the LONGER
+  // length — so a short or long candidate measures a length oracle, silently,
+  // under a chart captioned as the fixed-length prefix leak. HMAC-SHA-256 tags
+  // are 32 bytes; this panel requires exactly that and names the rejection.
+  if (provided.length !== expectedMac.length) {
+    throw new Error(
+      `Forged MAC must be exactly ${expectedMac.length * 2} hex characters ` +
+        `(${expectedMac.length} bytes, the HMAC-SHA-256 tag length) — got ${provided.length} byte${provided.length === 1 ? "" : "s"}.`
+    );
+  }
+
   const userVulnerableStart = performance.now();
   vulnerableVerifyBytes(expectedMac, provided);
   const userVulnerableEnd = performance.now();

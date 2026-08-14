@@ -291,7 +291,9 @@ export function renderHistogram(canvas: HTMLCanvasElement, series: HistogramSeri
   ctx.textAlign = "left";
   ctx.fillText(`${formatMs(minValue)} ms`, left, height - 10);
   ctx.textAlign = "center";
-  ctx.fillText("batch time per sample →", (left + right) / 2, height - 10);
+  // The axis endpoints are percentile bounds, not the observed extremes — say
+  // so, or clipped outliers silently masquerade as the full sample range.
+  ctx.fillText("batch time per sample (2nd–98th pct range) →", (left + right) / 2, height - 10);
   ctx.textAlign = "right";
   ctx.fillText(`${formatMs(maxValue)} ms`, right, height - 10);
   ctx.textAlign = "left";

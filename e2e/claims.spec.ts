@@ -239,6 +239,21 @@ test('panel 1 verdict follows the timing gap the same panel reported', async ({ 
     expect(verdict, 'leak verdict must disclaim attempting the recovery').toMatch(
       /never attempts the recovery/u
     );
+    // The flatness claim must be a measurement, not an assertion: the verdict
+    // has to report how much the constant-time sweep actually moved, and a
+    // leak verdict is only honest if that movement was smaller than the
+    // vulnerable rise (1% slack for the rendered rounding).
+    const ctPct = num(verdict, /moved ~(-?[\d.]+)%/u, 'constant-time movement');
+    expect(verdict, 'no unmeasured flatness claims').not.toMatch(/stayed flat/iu);
+    expect(ctPct, 'leak verdict requires the constant-time path to have moved less').toBeLessThanOrEqual(pct + 1);
+  } else if (verdict?.includes('Both paths drifted')) {
+    // The vulnerable rise cleared the threshold, but the constant-time sweep
+    // moved as much or more — the panel must refuse to call that a leak.
+    const pct = num(verdict, /rose ~(-?[\d.]+)%/u, 'vulnerable rise');
+    const ctPct = num(verdict, /moved ~(-?[\d.]+)%/u, 'constant-time movement');
+    expect(gain, 'drifted verdict still requires a positive vulnerable gain').toBeGreaterThan(0);
+    expect(pct).toBeGreaterThanOrEqual(15 - EPS * 100);
+    expect(ctPct, 'drifted verdict requires the constant-time path to have moved as much').toBeGreaterThanOrEqual(pct - 1);
   } else {
     const pct = num(verdict, /effect was ~(-?[\d.]+)%/u, 'verdict percentage');
     expect(
@@ -482,7 +497,7 @@ test('regression: a verdict never outlives the inputs it was measured from', asy
   await settle(page, '#strcmp-run', '#strcmp-verdict');
 
   const measured = await page.locator('#strcmp-verdict').textContent();
-  expect(measured).toMatch(/Timing signal observed this run|Signal below noise/u);
+  expect(measured).toMatch(/Timing signal observed this run|Both paths drifted this run|Signal below noise/u);
   expect(await page.locator('#strcmp-table table').count()).toBe(1);
 
   // Editing the secret invalidates the run that produced the verdict above.
@@ -498,7 +513,7 @@ test('regression: a verdict never outlives the inputs it was measured from', asy
 
   // The control still works afterwards: re-running restores a real verdict.
   await rerun(page, '#strcmp-run');
-  await expect(stale).toContainText(/Timing signal observed this run|Signal below noise/u);
+  await expect(stale).toContainText(/Timing signal observed this run|Both paths drifted this run|Signal below noise/u);
   expect(await page.locator('#strcmp-table table').count()).toBe(1);
 
   // Same rule for the HMAC panel's message field.

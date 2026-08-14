@@ -38,16 +38,42 @@ function scope(samples: number): string {
   return `Measured over ${samples} samples in this browser on this machine; a different machine, load level or sample count can land the other way.`;
 }
 
-/** String comparison: does runtime grow with the number of correct leading chars? */
-export function stringComparisonVerdict(shortPrefixMs: number, longPrefixMs: number, samples: number): Verdict {
+/**
+ * String comparison: does runtime grow with the number of correct leading chars?
+ *
+ * The verdict receives BOTH paths. An earlier version was handed only the
+ * vulnerable endpoints and still printed "while the constant-time path stayed
+ * flat" — a sentence it had no evidence for, in the exact panel that teaches
+ * why unmeasured claims are dangerous. The constant-time sweep endpoints now
+ * come in, the leak branch reports the movement it actually saw there, and a
+ * constant-time path that drifted as much as the vulnerable one downgrades the
+ * verdict: when both lines move together, the mover is load or timer noise,
+ * not the early exit.
+ */
+export function stringComparisonVerdict(
+  shortPrefixMs: number,
+  longPrefixMs: number,
+  constantShortMs: number,
+  constantLongMs: number,
+  samples: number
+): Verdict {
   const gap = relativeGap(longPrefixMs, shortPrefixMs);
   const grows = longPrefixMs > shortPrefixMs;
+  const constantGap = relativeGap(constantLongMs, constantShortMs);
   const pct = (gap * 100).toFixed(0);
-  if (grows && gap >= LEAK_RATIO) {
+  const constantPct = (constantGap * 100).toFixed(0);
+  if (grows && gap >= LEAK_RATIO && constantGap < gap) {
     return {
       tone: "leak",
       label: "Timing signal observed this run",
-      detail: `Vulnerable runtime rose ~${pct}% from a short to a full correct prefix, while the constant-time path stayed flat. ${scope(samples)} That is evidence the early-exit compare is distinguishable here, not a measurement of whether the secret is recoverable — this page never attempts the recovery. Character-at-a-time recovery against an early-exit compare is a well-established attack, which is the reason the pattern is avoided.`
+      detail: `Vulnerable runtime rose ~${pct}% from a short to a full correct prefix, while the constant-time sweep's endpoints moved ~${constantPct}% from zero to a full prefix. ${scope(samples)} That is evidence the early-exit compare is distinguishable here, not a measurement of whether the secret is recoverable — this page never attempts the recovery. Character-at-a-time recovery against an early-exit compare is a well-established attack, which is the reason the pattern is avoided.`
+    };
+  }
+  if (grows && gap >= LEAK_RATIO) {
+    return {
+      tone: "inconclusive",
+      label: "Both paths drifted this run",
+      detail: `Vulnerable runtime rose ~${pct}%, but the constant-time sweep's endpoints moved ~${constantPct}% — as much or more. When both paths drift together, load, thermal or timer effects are moving everything at once, so this run is not evidence the early-exit compare was separated from that noise. ${scope(samples)} The vulnerable path in the source still returns early; re-run on a quieter machine.`
     };
   }
   return {

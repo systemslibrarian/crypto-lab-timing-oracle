@@ -16,8 +16,24 @@ describe("relativeGap", () => {
 
 describe("leak verdicts", () => {
   it("string comparison flags a growing prefix as a leak", () => {
-    expect(stringComparisonVerdict(1, 2, 100).tone).toBe("leak");
-    expect(stringComparisonVerdict(1, 1.01, 100).tone).toBe("inconclusive");
+    expect(stringComparisonVerdict(1, 2, 1, 1.01, 100).tone).toBe("leak");
+    expect(stringComparisonVerdict(1, 1.01, 1, 1, 100).tone).toBe("inconclusive");
+  });
+
+  it("string comparison cannot claim a leak when the constant-time path drifted as much", () => {
+    // The verdict used to receive only the vulnerable endpoints and still print
+    // "while the constant-time path stayed flat" — a claim it had no evidence
+    // for. A constant-time sweep that moved as much as the vulnerable one means
+    // something moved BOTH lines, and that is not a leak finding.
+    const drifted = stringComparisonVerdict(1, 2, 1, 2.2, 100);
+    expect(drifted.tone).toBe("inconclusive");
+    expect(drifted.label).toBe("Both paths drifted this run");
+    // The leak branch reports the constant-time movement it measured rather
+    // than asserting flatness it never checked.
+    const leak = stringComparisonVerdict(1, 2, 1, 1.05, 100);
+    expect(leak.tone).toBe("leak");
+    expect(leak.detail).toContain("moved ~5%");
+    expect(leak.detail).not.toMatch(/stayed flat/iu);
   });
 
   it("hmac flags a positive prefix slope larger than the constant-time slope", () => {
@@ -42,8 +58,9 @@ describe("leak verdicts", () => {
 
 describe("verdicts state their scope rather than claiming exploitability", () => {
   const all = [
-    stringComparisonVerdict(1, 2, 512),
-    stringComparisonVerdict(1, 1.01, 512),
+    stringComparisonVerdict(1, 2, 1, 1.01, 512),
+    stringComparisonVerdict(1, 1.01, 1, 1, 512),
+    stringComparisonVerdict(1, 2, 1, 2.2, 512), // both paths drifted
     hmacVerdict(0.5, 0.0, 1, 512),
     hmacVerdict(0.001, 0.0, 1, 512),
     rsaVerdict(0.5, 0.0, 1, 512),
@@ -65,7 +82,10 @@ describe("verdicts state their scope rather than claiming exploitability", () =>
       /an attacker can recover the secret/iu,
       /statistically it is still exploitable/iu,
       /— a forgery oracle/iu,
-      /leaks the MAC\b/iu
+      /leaks the MAC\b/iu,
+      // Shipped in the string leak branch while the function only received the
+      // vulnerable endpoints: a flatness claim nothing had measured.
+      /stayed flat/iu
     ];
     for (const v of all) {
       for (const pattern of overclaims) {
