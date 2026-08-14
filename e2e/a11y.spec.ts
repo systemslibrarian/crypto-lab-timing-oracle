@@ -1,77 +1,61 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import {
+  boot,
+  driveAllStates,
+  expectBaselineNotStale,
+  NARROW,
+  reportCollected,
+  watchPageErrors,
+} from './gate';
 
 /**
- * WCAG regression gate. Deploys are already gated on the vitest suite; this
- * gates them on accessibility the same way. Scans the full page with every
- * <details> expanded and every live demo run, in both themes.
+ * WCAG A/AA regression gate.
+ *
+ * The lab is driven along everything it teaches: the arrival state, where no
+ * panel has been measured, all four measured-data disclosures are shut and the
+ * compare exhibit sits in its length-gate branch — the shipped guess is one
+ * character SHORTER than the secret, so zero character checks run and all 25
+ * cells render as "never inspected"; both skip links focused; the compare grid
+ * focused, which is the keyboard route into the only scroller that overflows at
+ * 380px; Panel 1 measured, its data table and distribution revealed, the modeled
+ * ideal signal overlaid, then the guess edited to the same length so matched,
+ * mismatched and skipped cells render together and the verdict invalidates
+ * itself, re-measured, replayed as an animation (which the Replay button
+ * deliberately shows even under reduced motion), and driven to a full match;
+ * Panel 2 measured, then fed a non-hex forged MAC so its `catch` branch renders
+ * with nothing measured, then restored; Panel 3 measured and its
+ * square-and-multiply schedule replayed across the generated key's exponent
+ * bits; Panel 4 measured; every disclosure open at once; three hover states, one
+ * focus ring on an input and one on a button; and finally the theme switched
+ * live through the shared bar with every panel already measured. Every one of
+ * those states is scanned, in both themes, at desktop and phone width.
+ *
+ * See `gate.ts` for why nothing is injected into the page (`animate.ts` branches
+ * on `matchMedia`, which a style tag cannot reach, so the old gate never once
+ * scanned the reduced-motion rendering), why no disclosure is opened from
+ * script, why the lab's defaults are asserted rather than assumed, and why
+ * `violations` is not the whole oracle.
  */
 
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+for (const theme of ['dark', 'light'] as const) {
+  test(`no WCAG A/AA violations in ${theme} theme`, async ({ page }) => {
+    test.setTimeout(1_800_000);
+    const errors = watchPageErrors(page);
+    await boot(page, theme);
+    await driveAllStates(page, theme);
+    expect(errors, errors.join('\n')).toEqual([]);
+    expectBaselineNotStale();
+    reportCollected();
+  });
 
-const RUN_BUTTONS = ['#strcmp-run', '#hmac-run', '#rsa-run', '#cache-run'];
-
-async function killMotion(page: Page): Promise<void> {
-  await page.addStyleTag({
-    content: `*,*::before,*::after{
-      animation:none!important;transition:none!important;
-      scroll-behavior:auto!important;
-    }`,
+  test(`no WCAG A/AA violations in ${theme} theme at 380px`, async ({ page }) => {
+    test.setTimeout(1_800_000);
+    const errors = watchPageErrors(page);
+    await page.setViewportSize(NARROW);
+    await boot(page, theme);
+    await driveAllStates(page, `${theme} @380px`);
+    expect(errors, errors.join('\n')).toEqual([]);
+    expectBaselineNotStale();
+    reportCollected();
   });
 }
-
-async function openAllDetails(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    for (const details of Array.from(document.querySelectorAll('details'))) {
-      details.open = true;
-    }
-  });
-}
-
-/**
- * Drive every panel's benchmark so the dynamically-populated result regions
- * (verdicts, summaries, tables) are present when axe scans, then wait for each
- * run button to leave its "Running…" busy state.
- */
-async function runAllDemos(page: Page): Promise<void> {
-  for (const sel of RUN_BUTTONS) {
-    const button = page.locator(sel);
-    await button.scrollIntoViewIfNeeded();
-    await button.click();
-    await expect(button).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 });
-    await expect(button).toBeEnabled({ timeout: 30_000 });
-  }
-}
-
-async function prepare(page: Page): Promise<void> {
-  await page.goto('.');
-  await expect(page.locator('#main-content')).toBeVisible();
-  await killMotion(page);
-  await runAllDemos(page);
-  await openAllDetails(page);
-}
-
-async function scan(page: Page): Promise<void> {
-  const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  const summary = results.violations.map((v) => ({
-    id: v.id,
-    impact: v.impact,
-    help: v.help,
-    nodes: v.nodes.map((n) => n.target.join(' ')).slice(0, 5),
-  }));
-  expect(summary).toEqual([]);
-}
-
-test('no WCAG A/AA violations in dark theme', async ({ page }) => {
-  await prepare(page);
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await scan(page);
-});
-
-test('no WCAG A/AA violations in light theme', async ({ page }) => {
-  await prepare(page);
-  await page.locator('#cl-theme-toggle').click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await openAllDetails(page);
-  await scan(page);
-});

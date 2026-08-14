@@ -13,6 +13,19 @@ const BASE = '/crypto-lab-timing-oracle/';
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
+  /*
+   * ONE worker, deliberately, in a lab about timing.
+   *
+   * Every panel here reports "Measured over N samples in this browser on this
+   * machine", and `ui.ts` goes to the trouble of serialising the four panels
+   * behind a page-wide queue so that claim holds. Running several browser
+   * contexts of the same page at once puts several independent benchmark queues
+   * on the same CPU and undoes that from the outside: `claims.spec.ts` asserts
+   * on measured distributions, and the a11y gate now drives every panel in four
+   * configurations. Contention has already invalidated timing findings elsewhere
+   * in this fleet — a suite reported at 17.5 minutes ran in 15.6s alone.
+   */
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'list' : [['list'], ['html', { open: 'never' }]],
