@@ -29,8 +29,13 @@ jobs:
       - run: npm run build
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Accessibility gate (axe-core, WCAG A/AA)
-        run: npm run test:a11y
+      # The full Playwright suite: e2e/claims.spec.ts (every rendered verdict
+      # recomputed from the panel's own numbers) plus e2e/a11y.spec.ts (WCAG
+      # A/AA in both themes). Running only test:a11y here meant the functional
+      # claims gate never blocked a deploy — the README's "tests run in CI
+      # before every Pages deploy" was only true of the accessibility half.
+      - name: Browser claims and accessibility gate
+        run: npm run test:e2e
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
