@@ -280,7 +280,7 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
 
   // ── The lab's own theme toggle is hidden, AND actually hidden ───────────
   // The shared bar hides every lab's in-page toggle with
-  // `body :is(#theme-toggle,…):not(#cl-theme-toggle) { display: none !important }`
+  // `body :is(#theme-toggle,…) { display: none !important }`
   // and leaves the element in the DOM so the lab's theme JS keeps working. That
   // is only correct if it is genuinely removed: `opacity: 0` with
   // `pointer-events: none` would leave a `<button>` at `tabIndex: 0`, tabbable
@@ -894,8 +894,8 @@ export async function driveAllStates(page: Page, theme: string): Promise<void> {
   await page.locator('.links a').first().hover();
   await scanAt('a Panel 5 related-demo chip hovered');
 
-  await page.locator('#cl-theme-toggle').hover();
-  await scanAt('the shared top bar theme toggle hovered');
+  await page.locator('.cl-topbar .cl-btn').first().hover();
+  await scanAt('a shared top bar control hovered');
 
   // ── Focus rings on the controls that take them ──────────────────────────
   await page.locator('#strcmp-target').focus();
@@ -904,14 +904,4 @@ export async function driveAllStates(page: Page, theme: string): Promise<void> {
 
   await page.locator('#cache-run').focus();
   await scanAt('a run button focused, showing its focus-visible outline');
-
-  // ── The theme switched IN PLACE, without a reload ───────────────────────
-  // Every other configuration seeds the theme through localStorage before
-  // `goto`, so this is the only state where the page is repainted live. It is
-  // also the state the gate this replaces mistook for a second full pass: it
-  // clicked this toggle and re-scanned without re-driving anything.
-  const other = theme.startsWith('dark') ? 'light' : 'dark';
-  await page.click('#cl-theme-toggle');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', other);
-  await scan(page, `${theme} / switched live to ${other} with every panel already measured`);
 }

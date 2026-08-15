@@ -26,7 +26,6 @@ export const NONTEXT_BASELINE: Record<
    * these two entries.
    */
   "control-boundary|a.cl-btn": { ratio: 1.49, required: 3.0, unverified: false },
-  "control-boundary|button#cl-theme-toggle.cl-btn.cl-icon": { ratio: 1.49, required: 3.0, unverified: false },
   /*
    * The ✓ / ✗ / × marks are positioned ABOVE their host cell (top: -0.85rem on
    * a 2.1rem cell, so the glyph paints wholly outside it), and the oracle
