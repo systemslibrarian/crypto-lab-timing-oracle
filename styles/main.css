@@ -201,30 +201,6 @@ input {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.theme-toggle {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 2.6rem;
-  min-width: 2.6rem;
-  height: 2.6rem;
-  min-height: 2.6rem;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-  color: var(--text);
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  line-height: 1;
-}
-
-.theme-toggle:hover {
-  background: color-mix(in srgb, var(--accent) 24%, var(--panel));
-}
-
 button,
 input {
   width: 100%;

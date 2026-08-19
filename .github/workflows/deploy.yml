@@ -31,7 +31,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       # The full Playwright suite: e2e/claims.spec.ts (every rendered verdict
       # recomputed from the panel's own numbers) plus e2e/a11y.spec.ts (WCAG
-      # A/AA in both themes). Running only test:a11y here meant the functional
+      # A/AA at desktop and 380px, in the one theme this lab pins).
+      # Running only test:a11y here meant the functional
       # claims gate never blocked a deploy — the README's "tests run in CI
       # before every Pages deploy" was only true of the accessibility half.
       - name: Browser claims and accessibility gate

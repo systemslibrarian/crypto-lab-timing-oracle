@@ -17,18 +17,6 @@ function byId<T extends HTMLElement>(id: string): T {
 
 const redraws: Array<() => void> = [];
 
-function setTheme(theme: "light" | "dark"): void {
-  document.documentElement.setAttribute("data-theme", theme);
-  const button = byId<HTMLButtonElement>("theme-toggle");
-  const isDark = theme === "dark";
-  button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
-  button.textContent = isDark ? "🌙" : "☀️";
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) {
-    meta.setAttribute("content", isDark ? "#1e232b" : "#f5efe5");
-  }
-}
-
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
@@ -162,7 +150,6 @@ function renderAppShell(): void {
         <span class="cl-hero-why-label">WHY IT MATTERS</span>
         <p class="cl-hero-why-text">Choosing the right algorithm is not enough: timing leaks have broken RSA, AES, HMAC, and TLS in shipped systems. When execution time depends on secret data, an attacker who measures it can recover keys and MACs, which is why constant-time code is mandatory in crypto.</p>
       </aside>
-      <button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode" type="button">🌙</button>
     </header>
 
     <main id="main-content" aria-label="Timing oracle demo panels">
@@ -335,22 +322,6 @@ function renderAppShell(): void {
       </section>
     </main>
   `;
-}
-
-function wireThemeToggle(): void {
-  const saved = localStorage.getItem("theme");
-  const current = saved === "light" || saved === "dark" ? saved : "dark";
-  setTheme(current);
-
-  const toggle = byId<HTMLButtonElement>("theme-toggle");
-  toggle.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("theme", next);
-    for (const redraw of redraws) {
-      redraw();
-    }
-  });
 }
 
 const VULN = "#ce2f4f";
@@ -772,7 +743,6 @@ function wireResizeRedraw(): void {
 
 export function initUi(): void {
   renderAppShell();
-  wireThemeToggle();
   const panels: Array<[string, () => Promise<void>]> = [
     ["strcmp-run", wireStringPanel()],
     ["hmac-run", wireHmacPanel()],

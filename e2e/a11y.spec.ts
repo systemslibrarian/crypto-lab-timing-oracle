@@ -26,9 +26,12 @@ import {
  * with nothing measured, then restored; Panel 3 measured and its
  * square-and-multiply schedule replayed across the generated key's exponent
  * bits; Panel 4 measured; every disclosure open at once; three hover states, one
- * focus ring on an input and one on a button; and finally the theme switched
- * live through the shared bar with every panel already measured. Every one of
- * those states is scanned, in both themes, at desktop and phone width.
+ * focus ring on an input and one on a button. Every one of those states is
+ * scanned, at desktop and phone width.
+ *
+ * One theme, not two: dark is the only theme this lab ships. It is pinned in
+ * `index.html` before first paint, the lab's own toggle has been deleted rather
+ * than hidden, and `boot()` asserts no theme control renders.
  *
  * See `gate.ts` for why nothing is injected into the page (`animate.ts` branches
  * on `matchMedia`, which a style tag cannot reach, so the old gate never once

@@ -234,13 +234,12 @@ export async function assertListSemantics(page: Page): Promise<void> {
  * the emulation silently failed the gate would scan the stepped animation while
  * claiming to scan the reduced-motion rendering.
  *
- * The theme is seeded through `localStorage` rather than by clicking the toggle,
- * which pins down a real failure mode as a side effect: `index.html`'s
- * anti-flash script reads `localStorage.getItem('theme')`, the shared bar's
- * toggle writes `localStorage.setItem('theme', …)`, and this lab ALSO has a
- * toggle of its own in `ui.ts` reading and writing the same key. All three agree
- * on `'theme'`; if any drifted, this boot fails on `data-theme` rather than
- * quietly scanning dark twice.
+ * The theme is seeded through `localStorage` before the navigation, which is now
+ * a test of the pin rather than a way of choosing a theme: no toggle exists to
+ * click any more, and `index.html`'s boot script writes the literal `'dark'` over
+ * whatever is stored before first paint. Seeding the key and then asserting
+ * `data-theme` is therefore the check that a stored preference from a visitor's
+ * past click cannot resurrect a light palette.
  *
  * The defaults are asserted at length because `ui.ts` builds the entire page
  * from `renderAppShell()` into an empty `<div id="app">`, and every panel's
@@ -278,23 +277,26 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
   await expect(page.locator('a.skip-link')).toHaveAttribute('href', '#main-content');
   await expect(page.locator('#app')).toHaveCount(1);
 
-  // ── The lab's own theme toggle is hidden, AND actually hidden ───────────
-  // The shared bar hides every lab's in-page toggle with
-  // `body :is(#theme-toggle,…) { display: none !important }`
-  // and leaves the element in the DOM so the lab's theme JS keeps working. That
-  // is only correct if it is genuinely removed: `opacity: 0` with
-  // `pointer-events: none` would leave a `<button>` at `tabIndex: 0`, tabbable
-  // and invisible. Measured from the live element by trying to focus it, rather
-  // than inferred from the CSS.
+  // ── No theme control renders at all ─────────────────────────────────────
+  // Dark is the only theme, and this asserts that as a property of the page
+  // rather than of one stylesheet. The shared bar still carries
+  // `body :is(#theme-toggle,…) { display: none !important }`, but that rule is
+  // now dead CSS: the lab's own toggle — a real `<button id="theme-toggle">`
+  // whose handler flipped `data-theme` and persisted the choice to
+  // `localStorage` — has been deleted, so nothing is left for it to hide. This
+  // check is what makes that permanent. It looks for any element matching the
+  // suppression rule's selector list, so a toggle reintroduced under any of
+  // those names fails here even though the CSS would have hidden it, and it
+  // reads the LIVE DOM after `renderAppShell()` rather than the source, which
+  // is the only way to catch one rendered from script.
   expect(
-    await page.evaluate(() => {
-      const t = document.getElementById('theme-toggle');
-      if (!t) return 'the lab theme toggle is missing entirely';
-      t.focus();
-      return document.activeElement === t ? 'it took focus while hidden' : 'ok';
-    }),
-    'the lab own theme toggle must be hidden in a way that also removes it from the tab order'
-  ).toBe('ok');
+    await page.evaluate(() =>
+      document.querySelectorAll(
+        '#theme-toggle, #themeToggle, .theme-toggle, .theme-toggle-btn, [data-theme-toggle]'
+      ).length
+    ),
+    'no theme control may render: this lab pins dark and ships no toggle'
+  ).toBe(0);
 
   // ── Every shipped control default ───────────────────────────────────────
   // Which half of this lab a scan sees depends entirely on these. The default
@@ -763,8 +765,10 @@ async function awaitAutoRun(page: Page, buttonId: string, verdictId: string): Pr
  *
  *  - HOVER IS A STATE, AND IT PERSISTS AFTER A CLICK. `:hover` stays on the
  *    element under the pointer after `page.click()` resolves, so it is the state
- *    a reader occupies the instant after pressing Run — and `.theme-toggle:hover`
- *    and `.cl-btn:hover` both repaint their fill. It is scanned explicitly.
+ *    a reader occupies the instant after pressing Run. `.cl-btn:hover` in the
+ *    shared bar repaints its fill, and it is scanned explicitly; a run button and
+ *    a related-demo chip are hovered too, so a hover rule added to either is
+ *    measured the day it lands rather than the next time someone remembers.
  *
  *  - THE REPLAY BUTTONS BYPASS REDUCED MOTION ON PURPOSE. `animate.ts` sets its
  *    `respectMotion` flag around an explicit press, so a Replay steps the

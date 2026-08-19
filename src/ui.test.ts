@@ -127,14 +127,22 @@ describe("initUi integration", () => {
     expect(verdict?.className).toContain("verdict--");
   });
 
-  it("toggles theme and updates the theme-color meta tag", () => {
+  // Dark is the only theme. It is pinned in index.html — `<html data-theme="dark">`
+  // plus a boot script that writes the literal before first paint — so the UI must
+  // render no theme control and must not touch the pinned theme, the stored 'theme'
+  // key, or the theme-color meta. This used to be the opposite test: it clicked a
+  // `#theme-toggle` the shell rendered and asserted the theme flipped. That toggle
+  // was only ever invisible because of one `display: none` rule in the shared
+  // header's inline styles, and it has been deleted.
+  it("renders no theme control and leaves the pinned theme untouched", () => {
     document.head.innerHTML = '<meta name="theme-color" content="#1e232b" />';
+    document.documentElement.setAttribute("data-theme", "dark");
     initUi();
-    const toggle = document.getElementById("theme-toggle") as HTMLButtonElement;
-    const before = document.documentElement.getAttribute("data-theme");
-    toggle.click();
-    const after = document.documentElement.getAttribute("data-theme");
-    expect(after).not.toBe(before);
-    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBeTruthy();
+    expect(
+      document.querySelector("#theme-toggle, #themeToggle, .theme-toggle, .theme-toggle-btn, [data-theme-toggle]")
+    ).toBeNull();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(localStorage.getItem("theme")).toBeNull();
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe("#1e232b");
   });
 });
