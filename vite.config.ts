@@ -1,5 +1,8 @@
 /// <reference types="vitest" />
-import { defineConfig } from "vite";
+// From vitest/config, not vite: vite 8's UserConfigExport has no `test` key, so
+// the block below is a TS2769 against vite's own overloads. Both exports are
+// `config => config`; the emitted build is identical either way.
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   base: "/crypto-lab-timing-oracle/",
