@@ -51,7 +51,7 @@ function runCli({ url, reportPath }) {
   return new Promise((accept, reject) => {
     const cli = resolve(root, 'node_modules/lighthouse/cli/index.js');
     const child = spawn(process.execPath, [cli, url, '--output=json', '--output-path=' + reportPath,
-      '--chrome-flags=--headless --disable-dev-shm-usage', '--quiet'], {
+      '--chrome-flags=--headless --disable-dev-shm-usage', '--verbose'], {
       env: { ...process.env, CHROME_PATH: process.env.CHROME_PATH || chromium.executablePath() },
       stdio: ['ignore', 'inherit', 'inherit'], timeout: 120_000,
     });

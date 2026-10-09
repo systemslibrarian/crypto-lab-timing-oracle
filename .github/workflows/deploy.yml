@@ -100,8 +100,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
-      - name: Install Playwright browser for Lighthouse
-        run: npx playwright install --with-deps chromium
+      # Use the hosted runner's system Chrome with its configured Linux sandbox.
+      # A missing executable fails here; do not disable Chrome's sandbox.
+      - name: Select installed Google Chrome for Lighthouse
+        run: |
+          chrome_path="$(command -v google-chrome)"
+          "$chrome_path" --version
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
       # Audit only the fresh application page, three times, retaining the
       # existing accessibility error and performance/SEO/best-practices warnings.
       - run: npm run quality
@@ -111,6 +116,7 @@ jobs:
         with:
           name: lighthouse-quality
           path: .lighthouseci
+          include-hidden-files: true
           if-no-files-found: error
 
   deploy:
