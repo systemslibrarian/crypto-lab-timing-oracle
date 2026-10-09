@@ -63,7 +63,7 @@ More broadly: browser timers are intentionally coarsened after Spectre mitigatio
 ## Verification
 
 ```bash
-npm test           # run the vitest unit + DOM integration suite
+npm test           # unit + DOM integration and maintenance error-path controls
 npm run build      # type-check (tsc) and produce a production build in dist/
 npm run test:e2e   # build, serve dist/, and drive it in Chromium (claims + a11y)
 ```
@@ -77,3 +77,23 @@ The crypto primitives (constant-time comparison, hex parsing, the timing-leak ve
 *Part of the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
 
 *"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
+
+
+## Lighthouse quality and publishing
+
+Use Node 22.19+ or Node 24+ and install Chromium with
+`npx playwright install chromium`. `npm run quality` builds the application
+with a root base and runs Lighthouse 13 three times. The unchanged
+`lighthouserc.json` requires accessibility 1.0 and warns below 0.9 for
+performance, SEO, and best practices. Each current audit must be readable,
+fresh, and complete; runtime errors, missing reports, wrong pages, and failed
+audits fail the command. Reports and a passed/failed manifest are retained in
+a new `.lighthouseci/audit-*` directory and uploaded by CI even on failure.
+Previous reports cannot replace missing current evidence.
+
+`npm run deploy` requests the existing gated `deploy.yml` workflow at `main`.
+Unit tests, the production build, and the complete claims/accessibility browser
+suite still gate publishing. Lighthouse remains a PR/auto-merge gate with its
+existing warning policy. A successful request is not successful deployment;
+inspect the workflow and the public application separately. A rejected request
+retains its failing exit status.

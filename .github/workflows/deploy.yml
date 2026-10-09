@@ -27,7 +27,7 @@ name: Deploy to GitHub Pages
 # leaves the original bug in place. Neither uniform recipe is right here.
 #
 # quality.yml is deleted rather than kept beside this file. Its `quality` job
-# moved here verbatim, so the set of checks a pull request runs strictly grew
+# moved here with the same assertions, so the set of checks a pull request runs strictly grew
 # (it now also runs `build`). A second copy of a gate is how the two drifted
 # apart in the first place.
 on:
@@ -79,7 +79,7 @@ jobs:
         with:
           path: dist
 
-  # Moved verbatim from quality.yml. Runs lint, unit/integration tests, and a
+  # Retains quality.yml assertions. Runs lint, unit/integration tests, and a
   # real-Chrome Lighthouse audit (accessibility incl. color-contrast, plus mobile
   # performance/SEO/best-practices). Deliberately NOT in `deploy.needs`: a
   # Lighthouse regression surfaces on the pull request without blocking the Pages
@@ -100,16 +100,18 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
-      # Build with a root base so the static Lighthouse server resolves assets.
-      - run: npx vite build --base=/ --outDir dist-lh
-      # Drop the SPA 404 redirect stub so Lighthouse only audits the app page (/),
-      # not the redirect (lhci staticDistDir auto-discovers every .html file).
-      - run: rm -f dist-lh/404.html
-      - uses: treosh/lighthouse-ci-action@v12
+      - name: Install Playwright browser for Lighthouse
+        run: npx playwright install --with-deps chromium
+      # Audit only the fresh application page, three times, retaining the
+      # existing accessibility error and performance/SEO/best-practices warnings.
+      - run: npm run quality
+      - name: Retain Lighthouse reports and failure manifest
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          configPath: ./lighthouserc.json
-          uploadArtifacts: true
-          temporaryPublicStorage: false
+          name: lighthouse-quality
+          path: .lighthouseci
+          if-no-files-found: error
 
   deploy:
     # A pull request is gated, never published. `!= 'pull_request'` and NOT
