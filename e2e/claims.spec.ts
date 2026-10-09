@@ -755,75 +755,39 @@ test('only one panel is ever being timed at once', async ({ page }) => {
   //
   // A page-wide queue now serialises them. aria-busy marks only the panel whose
   // turn it is, so the invariant is directly observable.
+  const ids = ['strcmp-run', 'hmac-run', 'rsa-run', 'cache-run'];
+  // Install before navigation: on a fast runner all automatic measurements can
+  // finish before page.goto() returns. Polling the current state afterwards
+  // cannot recover those transitions. This observes the rendered aria-busy
+  // changes throughout the run and still rejects overlapping measurements.
+  await page.addInitScript((list) => {
+    const evidence = { transitions: 0, maxConcurrent: 0, seen: [] as string[] };
+    Object.assign(window, { __timingBusyEvidence: evidence });
+    const observer = new MutationObserver(() => {
+      const busy = list.filter(id => document.getElementById(id)?.getAttribute('aria-busy') === 'true');
+      evidence.transitions += 1;
+      evidence.maxConcurrent = Math.max(evidence.maxConcurrent, busy.length);
+      for (const id of busy) if (!evidence.seen.includes(id)) evidence.seen.push(id);
+    });
+    observer.observe(document, { subtree: true, attributes: true, attributeFilter: ['aria-busy'] });
+  }, ids);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.setViewportSize({ width: 1280, height: 4000 }); // every panel in view at once
+  await page.setViewportSize({ width: 1280, height: 4000 });
   await page.goto('.');
   await expect(page.locator('#main-content')).toBeVisible();
 
-  const ids = ['strcmp-run', 'hmac-run', 'rsa-run', 'cache-run'];
-  const busyNow = () =>
-    page.evaluate(
-      (list) =>
-        list.filter((id) => document.getElementById(id)?.getAttribute('aria-busy') === 'true')
-          .length,
-      ids,
-    );
+  type EvidenceWindow = Window & { __timingBusyEvidence: { transitions: number; maxConcurrent: number; seen: string[] } };
+  const observed = () => page.evaluate(() => (window as EvidenceWindow).__timingBusyEvidence);
+  await expect.poll(async () => (await observed()).seen.slice().sort(), {
+    message: 'all four panels must actually be observed measuring; completion alone is not evidence',
+  }).toEqual(ids.slice().sort());
 
-  // WAIT ON STATE, NOT ON TIME. This used to poll a fixed 120 x 10ms window
-  // starting the instant the page loaded, and asserted that the window had
-  // caught a panel mid-measurement. On a slow or loaded runner the queue had
-  // not started inside that 1.2s, sawBusy stayed 0, and the suite failed with
-  // "at least one panel must have been caught measuring" -- a failure about the
-  // runner's speed, not about the invariant. It is the reason this lab's
-  // Dependabot bumps sat unmerged.
-  //
-  // So: wait for the first panel to actually enter the Running state, then
-  // sample until the last one leaves it. The observation window is now the
-  // whole measurement rather than an arbitrary span, which makes the
-  // non-vacuity assertion true by construction instead of by luck -- and it
-  // widens what the concurrency check sees rather than narrowing it.
-  await expect
-    .poll(busyNow, {
-      timeout: 90_000,
-      message: 'no panel ever entered the Running state, so there was nothing to observe',
-    })
-    .toBeGreaterThan(0);
-
-  let samples = 0;
-  let sawBusy = 0;
-  let maxConcurrent = 0;
-  const deadline = Date.now() + 90_000;
-
-  // Sample until every panel has finished: all buttons enabled and nothing busy.
-  for (;;) {
-    const busy = await busyNow();
-    samples += 1;
-    if (busy > 0) sawBusy += 1;
-    maxConcurrent = Math.max(maxConcurrent, busy);
-
-    if (busy === 0) {
-      const pending = await page.evaluate(
-        (list) => list.filter((id) => (document.getElementById(id) as HTMLButtonElement | null)?.disabled).length,
-        ids,
-      );
-      if (pending === 0) break;
-    }
-    if (Date.now() > deadline) break;
-    await page.waitForTimeout(10);
-  }
-
-  // Non-vacuous: the poll must actually have caught panels mid-measurement.
-  expect(samples, 'the poll must have run').toBeGreaterThan(0);
-  expect(sawBusy, 'at least one panel must have been caught measuring').toBeGreaterThan(0);
-  expect(
-    maxConcurrent,
-    `${maxConcurrent} panels were being timed at once — each one reports "measured on this machine"`,
-  ).toBe(1);
-
-  // And every panel still finished: serialising must not strand one.
-  for (const id of ids) {
-    await expect(page.locator(`#${id}`)).toBeEnabled({ timeout: 90_000 });
-  }
+  // Every panel must finish; observing a start alone cannot prove success.
+  for (const id of ids) await expect(page.locator(`#${id}`)).toBeEnabled();
+  const evidence = await observed();
+  expect(evidence.transitions, 'the observer must have seen actual transitions').toBeGreaterThan(0);
+  expect(evidence.seen.slice().sort()).toEqual(ids.slice().sort());
+  expect(evidence.maxConcurrent, 'every observed measurement must be exclusive').toBe(1);
   // Also state, not time: a panel re-enables its button a tick before its
   // verdict text is painted, so counting verdicts at that instant read 3 of 4.
   // The assertion is unchanged -- all four must arrive -- it just waits for

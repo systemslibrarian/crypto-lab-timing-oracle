@@ -8,26 +8,29 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.ts\" vite.config.ts",
-    "test": "vitest run",
+    "test": "vitest run && node --test tests/*.node.mjs",
     "test:watch": "vitest",
     "test:a11y": "playwright test e2e/a11y.spec.ts",
     "test:claims": "playwright test e2e/claims.spec.ts",
     "test:e2e": "playwright test",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "gh workflow run deploy.yml --repo systemslibrarian/crypto-lab-timing-oracle --ref main",
+    "quality": "vite build --base=/ --outDir dist-lh && node scripts/lighthouse-quality.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
-    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.63.0",
     "axe-core": "^4.14.0",
     "eslint": "^10.12.0",
-    "gh-pages": "^6.1.1",
     "globals": "^17.13.0",
     "happy-dom": "^20.14.5",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^8.3.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "lighthouse": "13.5.0"
+  },
+  "engines": {
+    "node": "^22.19.0 || ^24.0.0 || >=26.0.0"
   }
 }
