@@ -192,7 +192,7 @@ function renderAppShell(): void {
         </div>
 
         <figure class="chart-figure">
-          <figcaption id="strcmp-cap" class="chart-caption">What you are looking at: time vs. how many leading characters the guess got right. A line that <strong>rises to the right</strong> = each correct character costs more = leak. A <strong>flat line</strong> = constant-time = safe.</figcaption>
+          <p class="panel-note"><a href="https://www.hertzbleed.com/">Hertzbleed (2022)</a> and <a href="https://gofetch.fail/">GoFetch (2024)</a> show why hardware behavior can exceed source-level timing models; neither attack is demonstrated here.</p><figcaption id="strcmp-cap" class="chart-caption">What you are looking at: time vs. how many leading characters the guess got right. A line that <strong>rises to the right</strong> = each correct character costs more = leak. A <strong>flat line</strong> means no prefix-dependent trend is visible in these samples; it does not prove constant-time execution or safety.</figcaption>
           <canvas id="strcmp-sweep" aria-label="Line chart of vulnerable and constant-time comparison time versus number of correct leading characters" role="img" aria-describedby="strcmp-cap"></canvas>
         </figure>
         <div class="mode-toggle">
@@ -226,7 +226,7 @@ function renderAppShell(): void {
         </div>
         <div id="hmac-error" class="error" role="status" aria-live="assertive"></div>
         <figure class="chart-figure">
-          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each extra correct byte makes the early-exit compare run one step further before rejecting, so a <em>slower</em> response marks a correct byte — leak the MAC one byte at a time. A <strong>flat line</strong> is the constant-time compare. The chart samples five prefix lengths (0&ndash;16 of the tag's 32 bytes) as sparse points on that curve, and each candidate is built from the known expected MAC — this calibrates the oracle's timing; it does not recover an unknown MAC.</figcaption>
+          <figcaption id="hmac-cap" class="chart-caption">What you are looking at: verification time vs. how many MAC bytes the forgery got right. A line <strong>rising to the right</strong> means each extra correct byte makes the early-exit compare run one step further before rejecting, so a <em>slower</em> response marks a correct byte — leak the MAC one byte at a time. A <strong>flat line</strong> is an observed measurement, not proof of constant-time execution. The chart samples five prefix lengths (0&ndash;16 of the tag's 32 bytes) as sparse points on that curve, and each candidate is built from the known expected MAC — this calibrates the oracle's timing; it does not recover an unknown MAC.</figcaption>
           <canvas id="hmac-line" aria-label="Line chart of HMAC timing by correct prefix length" role="img" aria-describedby="hmac-cap"></canvas>
         </figure>
         <p id="hmac-summary" class="chart-summary" aria-live="polite"></p>
