@@ -7,11 +7,15 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const npmCli = join(process.execPath, '..', '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+// npm exposes the CLI that launched this script. Do not infer its location from
+// process.execPath: Homebrew installs node in a versioned Cellar directory but
+// keeps npm in its shared prefix, so that derived path does not exist.
+const npmCli = process.env.npm_execpath;
 
 // Replace only the external GitHub boundary; exercise the real npm script.
 // Neither control dispatches a workflow or uploads any local build.
 function request(exitCode) {
+  assert.ok(npmCli, 'npm_execpath is required; run this control through the npm script');
   const dir = mkdtempSync(join(tmpdir(), 'publish-request-control-'));
   const gh = join(dir, 'gh');
   writeFileSync(gh, '#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(Number(process.env.PUBLISH_CONTROL_EXIT));\n');
