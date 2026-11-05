@@ -6,6 +6,7 @@ import { benchmarkRsaTiming, EXPONENT_WINDOW_BITS, type RsaTimingStats } from ".
 import { renderDataTable, renderHistogram, renderLineChart, type LineSeries } from "./stats";
 import { benchmarkStringComparisons, type ComparisonStats } from "./strcmp";
 import { cacheVerdict, hmacVerdict, rsaVerdict, stringComparisonVerdict, type Verdict } from "./verdict";
+import { renderVerdict } from "./verdict-dom";
 
 function byId<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -109,10 +110,9 @@ async function withRunning(button: HTMLButtonElement, work: () => void | Promise
 }
 
 function setVerdict(id: string, verdict: Verdict): void {
-  const node = byId<HTMLDivElement>(id);
-  node.className = `verdict verdict--${verdict.tone}`;
-  const icon = verdict.tone === "leak" ? "⚠" : verdict.tone === "safe" ? "✓" : "•";
-  node.innerHTML = `<strong>${icon} ${verdict.label}.</strong> ${verdict.detail}`;
+  // Rendered by src/verdict-dom.ts, which builds the same <strong> + text with DOM
+  // APIs instead of innerHTML. See its header for the codeFlow this closes.
+  renderVerdict(byId<HTMLDivElement>(id), verdict);
 }
 
 /**
