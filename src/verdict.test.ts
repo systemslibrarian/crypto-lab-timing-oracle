@@ -32,8 +32,18 @@ describe("leak verdicts", () => {
     // than asserting flatness it never checked.
     const leak = stringComparisonVerdict(1, 2, 1, 1.05, 100);
     expect(leak.tone).toBe("leak");
-    expect(leak.detail).toContain("moved ~5%");
+    expect(leak.detail).toContain("~5% of the longer time for the constant-time comparison");
     expect(leak.detail).not.toMatch(/stayed flat/iu);
+  });
+
+  it("names the denominator and describes large gaps in either direction", () => {
+    expect(stringComparisonVerdict(1, 2, 1, 1, 40).detail).toContain("gap was ~50% of the longer time");
+    const reverse = stringComparisonVerdict(2, 1, 1, 1, 40);
+    expect(reverse.detail).toContain("gap was ~50% of the longer time");
+    expect(reverse.detail).toContain("did not exceed");
+    expect(cacheVerdict(1, 2, 40).detail).toContain("~50% of that longer time");
+    expect(cacheVerdict(2, 1, 40).detail).toContain("uncached mean did not exceed");
+    expect(cacheVerdict(0, 0, 40).tone).toBe("inconclusive");
   });
 
   it("hmac flags a positive prefix slope larger than the constant-time slope", () => {

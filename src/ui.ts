@@ -265,7 +265,7 @@ function renderAppShell(): void {
         <p id="rsa-summary" class="chart-summary" aria-live="polite"></p>
         <div id="rsa-verdict" class="verdict" role="status" aria-live="polite"></div>
         <details class="chart-data"><summary>Show measured data</summary><div id="rsa-table"></div></details>
-        <p class="panel-note">Kocher, 1996: <em>Timing Attacks on Implementations of Diffie-Hellman, RSA, DSS, and Other Systems</em>.</p>
+        <p class="panel-note"><a href="https://cr.yp.to/bib/1996/kocher.pdf">Kocher (1996), section 6</a> reports measurements with the RSAREF toolkit and a Diffie-Hellman example modulus.</p>
       </section>
 
       <section class="panel" aria-labelledby="panel4-title">
@@ -277,6 +277,7 @@ function renderAppShell(): void {
           </div>
         </div>
         <p class="panel-text">Cache hits and misses have different access latency. Secret-dependent table lookups can leak information via timing.</p>
+        <p class="panel-note">The percentage gap divides the difference by the longer mean. For 1 ms and 2 ms, the gap is 50% of the longer mean. Going from 1 ms to 2 ms is a 100% increase.</p>
         <button id="cache-run" type="button">Measure cached vs uncached memory access</button>
         <figure class="chart-figure">
           <figcaption id="cache-cap" class="chart-caption">What you are looking at: access-time distributions for data already in cache vs. evicted. A <strong>right-shifted uncached</strong> curve means cache state changes latency — and secret-dependent lookups leak through it.</figcaption>

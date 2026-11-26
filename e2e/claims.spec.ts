@@ -224,7 +224,7 @@ test('panel 1 verdict follows the timing gap the same panel reported', async ({ 
   expect(comparisons, 'batch size the gain is spread over').toBeGreaterThan(0);
 
   if (tone?.includes('verdict--leak')) {
-    const pct = num(verdict, /rose ~(-?[\d.]+)%/u, 'verdict percentage');
+    const pct = num(verdict, /endpoint gap was ~(-?[\d.]+)% of the longer time/u, 'verdict percentage');
     // A positive-tone verdict is only honest if the measured runtime actually
     // ROSE and cleared the panel's own 15% threshold.
     expect(gain, 'leak verdict requires a positive gain').toBeGreaterThan(0);
@@ -243,19 +243,19 @@ test('panel 1 verdict follows the timing gap the same panel reported', async ({ 
     // has to report how much the constant-time sweep actually moved, and a
     // leak verdict is only honest if that movement was smaller than the
     // vulnerable rise (1% slack for the rendered rounding).
-    const ctPct = num(verdict, /moved ~(-?[\d.]+)%/u, 'constant-time movement');
+    const ctPct = num(verdict, /and ~(-?[\d.]+)% of the longer time for the constant-time comparison/u, 'constant-time movement');
     expect(verdict, 'no unmeasured flatness claims').not.toMatch(/stayed flat/iu);
     expect(ctPct, 'leak verdict requires the constant-time path to have moved less').toBeLessThanOrEqual(pct + 1);
   } else if (verdict?.includes('Both paths drifted')) {
     // The vulnerable rise cleared the threshold, but the constant-time sweep
     // moved as much or more — the panel must refuse to call that a leak.
-    const pct = num(verdict, /rose ~(-?[\d.]+)%/u, 'vulnerable rise');
-    const ctPct = num(verdict, /moved ~(-?[\d.]+)%/u, 'constant-time movement');
+    const pct = num(verdict, /endpoint gap was ~(-?[\d.]+)% of the longer time/u, 'vulnerable rise');
+    const ctPct = num(verdict, /and ~(-?[\d.]+)% of the longer time for the constant-time comparison/u, 'constant-time movement');
     expect(gain, 'drifted verdict still requires a positive vulnerable gain').toBeGreaterThan(0);
     expect(pct).toBeGreaterThanOrEqual(15 - EPS * 100);
     expect(ctPct, 'drifted verdict requires the constant-time path to have moved as much').toBeGreaterThanOrEqual(pct - 1);
   } else {
-    const pct = num(verdict, /effect was ~(-?[\d.]+)%/u, 'verdict percentage');
+    const pct = num(verdict, /endpoint gap was ~(-?[\d.]+)% of the longer time/u, 'verdict percentage');
     expect(
       gain <= 0 || pct <= 15 + EPS * 100,
       `inconclusive verdict but gain=${gain} pct=${pct}`
@@ -462,7 +462,7 @@ test('panel 4 cache verdict is recomputed from the cached/uncached means it publ
   if (tone?.includes('verdict--leak')) {
     // "Cache state is observable" requires uncached to actually be SLOWER.
     expect(uncached, 'observable cache state requires uncached > cached').toBeGreaterThan(cached);
-    const claimed = num(verdict, /~(-?[\d.]+)% slower/u, 'claimed slowdown');
+    const claimed = num(verdict, /~(-?[\d.]+)% of that longer time/u, 'claimed slowdown');
     // The verdict is computed from full-precision means but printed to whole
     // percent, and the table rounds the means it shows. Compare inside the
     // error those two roundings actually allow, rather than a flat window that

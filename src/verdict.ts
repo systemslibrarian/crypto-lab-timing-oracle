@@ -66,20 +66,20 @@ export function stringComparisonVerdict(
     return {
       tone: "leak",
       label: "Timing signal observed this run",
-      detail: `Vulnerable runtime rose ~${pct}% from a short to a full correct prefix, while the constant-time sweep's endpoints moved ~${constantPct}% from zero to a full prefix. ${scope(samples)} That is evidence the early-exit compare is distinguishable here, not a measurement of whether the secret is recoverable — this page never attempts the recovery. Character-at-a-time recovery against an early-exit compare is a well-established attack, which is the reason the pattern is avoided.`
+      detail: `The full-prefix batch took longer. The endpoint gap was ~${pct}% of the longer time for the early-exit comparison and ~${constantPct}% of the longer time for the constant-time comparison. ${scope(samples)} That is evidence the early-exit compare is distinguishable here, not a measurement of whether the secret is recoverable — this page never attempts the recovery. Character-at-a-time recovery against an early-exit compare is a well-established attack, which is the reason the pattern is avoided.`
     };
   }
   if (grows && gap >= LEAK_RATIO) {
     return {
       tone: "inconclusive",
       label: "Both paths drifted this run",
-      detail: `Vulnerable runtime rose ~${pct}%, but the constant-time sweep's endpoints moved ~${constantPct}% — as much or more. When both paths drift together, load, thermal or timer effects are moving everything at once, so this run is not evidence the early-exit compare was separated from that noise. ${scope(samples)} The vulnerable path in the source still returns early; re-run on a quieter machine.`
+      detail: `The full-prefix batch took longer. The endpoint gap was ~${pct}% of the longer time for the early-exit comparison and ~${constantPct}% of the longer time for the constant-time comparison. The control moved at least as much. Changes in load or scheduling could affect both measurements. This is not evidence of a distinct early-exit effect. ${scope(samples)} The vulnerable path in the source still returns early; re-run on a quieter machine.`
     };
   }
   return {
     tone: "inconclusive",
     label: "Signal below noise this run",
-    detail: `Prefix-length effect was ~${pct}% this run — under the ${(LEAK_RATIO * 100).toFixed(0)}% ratio this panel treats as observable. ${scope(samples)} This says the difference was not resolved here; it is not evidence that the compare is constant-time, since browser timer coarsening can hide a real per-character difference. Read the source: the vulnerable path still returns early.`
+    detail: `The endpoint gap was ~${pct}% of the longer time. ${grows ? "The increase fell below the panel threshold." : "The full-prefix time did not exceed the short-prefix time."} ${scope(samples)} This says the difference was not resolved here; it is not evidence that the compare is constant-time, since browser timer coarsening can hide a real per-character difference. Read the source: the vulnerable path still returns early.`
   };
 }
 
@@ -118,13 +118,13 @@ export function rsaVerdict(
     return {
       tone: "leak",
       label: "Bit-dependent gap observed this run",
-      detail: `Square-and-multiply timing tracked the secret exponent bit (gap ~${(naiveRel * 100).toFixed(0)}% vs ladder ~${(ladderRel * 100).toFixed(0)}%). ${scope(samples)} This is a toy key and no exponent bit was actually recovered here. Kocher (1996) recovered real RSA keys from exactly this branch, which is why the Montgomery ladder runs the same operations regardless of the bit.`
+      detail: `Square-and-multiply timing tracked the secret exponent bit (gap ~${(naiveRel * 100).toFixed(0)}% vs ladder ~${(ladderRel * 100).toFixed(0)}%). ${scope(samples)} This is a toy key and no exponent bit was actually recovered here. Kocher (1996, §6) measured modular exponentiation with RSAREF using a Diffie-Hellman example modulus. The ladder here uses a fixed operation schedule.`
     };
   }
   return {
     tone: "inconclusive",
     label: "Signal below noise this run",
-    detail: `Bit-dependent gap was small this run on this toy key. ${scope(samples)} The naive path in the source is still branch-on-bit, so this is a limit of the measurement rather than a property of the algorithm. Kocher (1996) recovered real RSA keys from exactly this branch; always use a constant-time ladder.`
+    detail: `Bit-dependent gap was small this run on this toy key. ${scope(samples)} The naive path in the source is still branch-on-bit, so this is a limit of the measurement rather than a property of the algorithm. Kocher (1996, §6) measured modular exponentiation using a Diffie-Hellman example modulus. A fixed operation count alone cannot establish constant-time execution in JavaScript.`
   };
 }
 
@@ -135,12 +135,12 @@ export function cacheVerdict(cachedMs: number, uncachedMs: number, samples: numb
     return {
       tone: "leak",
       label: "Cache state observable this run",
-      detail: `Uncached access was ~${(gap * 100).toFixed(0)}% slower than cached. ${scope(samples)} No key was extracted here — this shows the two access patterns are distinguishable on this machine, which is the channel Bernstein (2005) used to extract AES keys. Secret-dependent table lookups (e.g. software AES S-boxes) ride this channel; prefer AES-NI / WebCrypto.`
+      detail: `The uncached mean was longer. The difference was ~${(gap * 100).toFixed(0)}% of that longer time. ${scope(samples)} No key was extracted here — this shows the two access patterns are distinguishable on this machine, which is the channel Bernstein (2005) used to extract AES keys. Secret-dependent table lookups (e.g. software AES S-boxes) ride this channel; prefer AES-NI / WebCrypto.`
     };
   }
   return {
     tone: "inconclusive",
     label: "Signal below noise this run",
-    detail: `Cache effect was small this run — the working set may already fit in cache, or the timer is too coarse. ${scope(samples)} Bernstein (2005) extracted AES keys via this exact channel, so a small gap here is a statement about this measurement, not about the channel.`
+    detail: `${uncachedMs > cachedMs ? "The difference fell below the panel threshold." : "The uncached mean did not exceed the cached mean."} ${scope(samples)} Bernstein (2005) extracted AES keys via this exact channel, so a small gap here is a statement about this measurement, not about the channel.`
   };
 }
